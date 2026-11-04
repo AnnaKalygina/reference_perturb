@@ -1,0 +1,6 @@
+{
+ "source": "where_simple_baselines_fail branch wsb-13-talk-figures, results/talk_2026-10-20/M1_k562_essential.csv (talk figures 2026-10-20)",
+ "use": "validation check (c): K562 essential perturbation count, median M, median rho, share rho >= 0.5",
+ "sha256": "f57af58e30796b69212717e1ec35c8be1ea70c42b4bf931d861a9feedf6b6f24",
+ "created": "2026-11-04T23:03:23"
+}

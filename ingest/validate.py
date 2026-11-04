@@ -1,6 +1,7 @@
 """Validation stage: independent recomputation of deltas from shard blocks, pseudo-perturbation nulls, and the VCC2026 comparison."""
 import argparse
 import hashlib
+import json
 import sys
 import time
 from pathlib import Path
@@ -19,6 +20,7 @@ from receipts import done, finish, write_json  # noqa: E402
 VCC = Path("/cluster/work/boeva/VCC/VCC2026/data")
 VCC_CONTEXTS = {"replogle22_essential__K562": "replogle_nadig__k562", "replogle22_essential__RPE1": "replogle_nadig__rpe1", "nadig25__HepG2": "replogle_nadig__hepg2"}
 POOL = 20000
+TALK_CONTEXT = "replogle22_essential__K562"
 
 
 def rng_for(cfg, context, purpose):
@@ -146,9 +148,58 @@ def run(context, cfg):
                                              n_cells=n_med, n_draws=len(z), passed=bool(abs(z.mean()) <= 3 * se))
     if context in VCC_CONTEXTS:
         result["d_vcc2026"] = compare_vcc(context, VCC_CONTEXTS[context], cfg)
+    if context == TALK_CONTEXT:
+        result["c_talk"] = compare_talk(context, cfg)
     write_json(out, result)
     finish(cfg, "validate", context, [out], [str(shard)], started)
     print(f"{context}: a {result['a_recompute']['passed']}, b {[v['passed'] for v in result['b_null'].values()]}, d {result.get('d_vcc2026', {}).get('passed')}, {round(time.time() - started)} s", flush=True)
+
+
+def compare_talk(context, cfg):
+    """K562 essential against the talk of 2026-10-20: perturbations with n >= 20, median M, median rho and the share rho >= 0.5."""
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from reference_perturb import Reference
+
+    R = Reference(cfg["root"])
+    talk = pd.read_csv(Path(cfg["root"]) / "config" / "validation_k562_essential_talk.csv")
+    qc = R.pert_qc(context)
+    singles = qc[(qc.profile == "authors") & (qc.half == "all") & (qc.kind == "single")]
+    n20 = singles[singles.n >= 20]
+    pix, d = R.deltas(context, spaces=("C",))
+    ix, mom = R.means(context)
+    cix, cm = R.means(context, table="ctrl")
+    cnt = R.cell_counts(context)
+    cnt = cnt[(cnt.profile == "authors") & (cnt.half == "all")]
+    g0 = R.masks(context)["g0"]
+    ids = R.measured_genes(context).ensembl_id.to_numpy()
+    pa, da = R.deltas(context, half="A", spaces=("C",))
+    pb, db = R.deltas(context, half="B", spaces=("C",))
+    rowA, rowB = {p: i for i, p in enumerate(pa.perturbation)}, {p: i for i, p in enumerate(pb.perturbation)}
+    cn = dict(zip(cix.batch, cix.n))
+    rows = []
+    for i, p in enumerate(pix.perturbation):
+        if p not in set(n20.perturbation):
+            continue
+        t = n20[n20.perturbation == p].iloc[0]
+        target = str(t.target) if isinstance(t.target, str) else None
+        mask = g0 & (ids != target)
+        w = cnt[cnt.perturbation == p]
+        wb = dict(zip(w.batch, w.n_pb / w.n_pb.sum()))
+        ctrl_var = sum((wb[b] ** 2) * cm["var_C"][list(cix.batch).index(b)] / cn[b] for b in wb if b in cn)
+        noise = mom["var_C"][i] / ix.n.iloc[i] + ctrl_var
+        M = float(((d["dC"][i].astype(np.float64) ** 2) - noise)[mask].sum())
+        r = np.corrcoef(da["dC"][rowA[p]][mask], db["dC"][rowB[p]][mask])[0, 1] if p in rowA and p in rowB else np.nan
+        rows.append(dict(perturbation=p, n=int(t.n), M=M, rho=2 * r / (1 + r) if np.isfinite(r) else np.nan))
+    ours = pd.DataFrame(rows)
+    shared = ours.merge(talk[["perturbation", "M", "rho"]], on="perturbation", suffixes=("", "_talk"))
+    out = dict(n_perturbations=int(len(n20)), n_talk=int(len(talk)), n_shared=int(len(shared)), median_M=float(ours.M.median()), median_M_talk=float(talk.M.median()),
+               median_rho=float(ours.rho.median()), median_rho_talk=float(talk.rho.median()), share_rho_05=float((ours.rho >= 0.5).mean()), share_rho_05_talk=float((talk.rho >= 0.5).mean()),
+               spearman_M=float(shared[["M", "M_talk"]].corr("spearman").iloc[0, 1]), spearman_rho=float(shared[["rho", "rho_talk"]].corr("spearman").iloc[0, 1]))
+    gate = json.loads((Path(cfg["root"]) / "manifest" / f"{context}.json").read_text())["gate"]
+    out["gate_excluded_single_labels"] = [g["label"] for g in gate if g["n_targets"] == 1]
+    out["passed"] = bool(0 <= out["n_talk"] - out["n_perturbations"] <= len(out["gate_excluded_single_labels"]) and abs(out["median_M"] / out["median_M_talk"] - 1) <= 0.05
+                         and abs(out["median_rho"] - out["median_rho_talk"]) <= 0.03 and abs(out["share_rho_05"] - out["share_rho_05_talk"]) <= 0.03)
+    return out
 
 
 def compare_vcc(context, vcc_context, cfg):
