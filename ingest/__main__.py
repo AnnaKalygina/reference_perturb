@@ -54,13 +54,24 @@ def running(cfg):
     return {line.split("|")[0]: line.split("|")[1] for line in out.splitlines() if line.startswith("ingest:")}
 
 
+def shard_units(cfg):
+    """context -> shard unit, from the shard receipts."""
+    out = {}
+    for p in path(cfg, "receipts", "outputs", "shard").glob("*.json") if path(cfg, "receipts", "outputs", "shard").exists() else []:
+        rec = json.loads(p.read_text())
+        for c in rec.get("contexts", []):
+            out[c] = rec["unit"]
+    return out
+
+
 def status(cfg):
     """One row per (context, stage)."""
     jobs = running(cfg)
+    units = shard_units(cfg)
     rows = []
     for dataset, context in contexts_of(cfg):
         for stage in STAGES:
-            unit = dataset if stage == "shard" else context
+            unit = units.get(context, dataset) if stage == "shard" else context
             rec = receipt(cfg, stage, unit)
             rows.append(dict(dataset=dataset, context=context, stage=stage, state=state(cfg, stage, unit, stage_outputs(cfg, stage, dataset, context)),
                              job=jobs.get(f"ingest:{stage}:{unit}"), seconds=rec and rec.get("seconds"), peak_rss_gb=rec and rec.get("peak_rss_gb"),

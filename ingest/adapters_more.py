@@ -392,8 +392,8 @@ class Feng(GeneMajor):
         with gzip.open(self.dir() / self.FILES[self._unit], "rt") as fh:
             fh.readline()
             g = 0
-            for chunk in pd.read_csv(fh, header=None, index_col=0, chunksize=rows_per_block, dtype=np.int32, engine="c"):
-                block = chunk.to_numpy()
+            for chunk in pd.read_csv(fh, header=None, chunksize=rows_per_block, engine="c", dtype={0: str}):
+                block = chunk.iloc[:, 1:].to_numpy(np.int32)
                 r, c = np.nonzero(block)
                 yield c.astype(np.int32), (r + g).astype(np.int32), block[r, c].astype(np.int32)
                 g += block.shape[0]
