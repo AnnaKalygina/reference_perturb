@@ -72,22 +72,28 @@ def run(context, cfg):
                     sum_xc = hp[f"{profile}/{half}/sum_xC"][s:s + len(rows)]
                     ga[s:s + len(rows)] = np.log1p(kappa * sum_c / rows.sum_L.to_numpy()[:, None]) - np.log1p(kappa * ref_a[s:s + len(rows)])
                     gc[s:s + len(rows)] = sum_xc / rows.n.to_numpy()[:, None] - ref_c[s:s + len(rows)]
-                wn_sq = wn.multiply(wn)
-                inv_n = np.array([1 / ctrl_n[b] for b in batches])
-                n_eff = 1 / np.maximum(np.asarray(wn_sq @ inv_n).ravel(), 1e-300)
-                ctrl_arr = np.array([ctrl_n[b] for b in batches], float)
-                w_csr = wn.tocsr()
-                min_ctrl = np.array([ctrl_arr[w_csr.indices[w_csr.indptr[i]:w_csr.indptr[i + 1]]].min() if w_csr.indptr[i + 1] > w_csr.indptr[i] else np.inf for i in range(len(perts))])
-                for i, r in enumerate(pi.itertuples()):
-                    qc_rows.append(dict(perturbation=r.perturbation, kind=r.kind, profile=profile, half=half, n=int(r.n), n_batches=int(r.n_batches), n_excluded=int(r.n_excluded),
-                                        n_eff=float(n_eff[i]), n_eff_over_n=float(n_eff[i] / r.n), n_eff_below_4x_cells=bool(n_eff[i] < pop["n_eff_flag_ratio"] * r.n),
-                                        batch_below_5_controls=bool(min_ctrl[i] < pop["min_controls_per_batch_floor"]), n_below_20=bool(r.n < pop["n_cells_flag"]),
-                                        delta_row=int(r.row)))
+        for profile in PROFILES:
+            for half in HALVES:
+                cnt = counts[(counts.profile == profile) & (counts.half == half)]
+                ci = index[(index.table == "ctrl") & (index.profile == profile) & (index.half == half)]
+                pi = index[(index.table == "pert") & (index.profile == profile) & (index.half == half)]
+                if len(cnt) == 0 or len(ci) == 0:
+                    continue
+                ctrl_n = dict(zip(ci.batch, ci.n))
+                pops = cnt.groupby(["perturbation", "kind"], as_index=False).agg(n=("n_pb", "sum"), n_excluded=("n_excluded", "sum"), n_batches=("batch", "nunique"))
+                perts = pops.perturbation.tolist()
+                wn = weights(cnt, perts, list(ci.batch), "n_pb").tocsr()
+                ctrl_arr = np.array([ctrl_n[b] for b in ci.batch], float)
+                n_eff = 1 / np.maximum(np.asarray(wn.multiply(wn) @ (1 / ctrl_arr)).ravel(), 1e-300)
+                min_ctrl = np.array([ctrl_arr[wn.indices[wn.indptr[i]:wn.indptr[i + 1]]].min() if wn.indptr[i + 1] > wn.indptr[i] else np.inf for i in range(len(perts))])
+                rows = dict(zip(pi.perturbation, pi.row))
+                for i, r in enumerate(pops.itertuples()):
+                    n = int(r.n)
+                    qc_rows.append(dict(perturbation=r.perturbation, kind=r.kind, profile=profile, half=half, n=n, n_batches=int(r.n_batches), n_excluded=int(r.n_excluded),
+                                        n_eff=float(n_eff[i]) if n else np.nan, n_eff_over_n=float(n_eff[i] / n) if n else np.nan,
+                                        n_eff_below_4x_cells=bool(n and n_eff[i] < pop["n_eff_flag_ratio"] * n), batch_below_5_controls=bool(min_ctrl[i] < pop["min_controls_per_batch_floor"]),
+                                        n_below_20=bool(n < pop["n_cells_flag"]), delta_row=int(rows.get(r.perturbation, -1))))
     qc = pd.DataFrame(qc_rows)
-    small = counts.groupby(["perturbation", "kind", "profile", "half"], as_index=False).agg(n=("n_pb", "sum"), n_excluded=("n_excluded", "sum"), n_batches=("batch", "nunique"))
-    small = small[~small.set_index(["perturbation", "profile", "half"]).index.isin(qc.set_index(["perturbation", "profile", "half"]).index)]
-    small["delta_row"] = -1
-    qc = pd.concat([qc, small], ignore_index=True)
     gk_cols = [c for c in gk.columns if c.startswith(("target", "knockdown", "guide", "n_guides"))]
     qc = qc.merge(gk[["perturbation", "profile"] + gk_cols], on=["perturbation", "profile"], how="left")
     qc["target_not_measured"] = qc.get("target", pd.Series(index=qc.index, dtype=object)).isna() | qc.get("knockdown_ratio", pd.Series(index=qc.index)).isna()

@@ -47,7 +47,7 @@ def prepare_obs(obs, dataset, adapter, cfg, fmap, axis):
     if "assigned_by" not in obs:
         obs["assigned_by"] = "authors"
     obs["pct_mito_author"] = pd.to_numeric(obs.pct_mito, errors="coerce")
-    drops = obs[obs.drop_reason != ""].groupby(["context", "batch", "drop_reason"], observed=True).size()
+    drops = obs[obs.drop_reason != ""].groupby(["context", "batch", "drop_reason"], observed=True).size().rename("n")
     gate_log = pd.DataFrame([(lab, *v) for lab, v in table.items()], columns=["label", "symbol", "ensembl", "n_targets", "gate"])
     keep = obs[obs.drop_reason == ""].drop(columns="drop_reason").copy()
     halves = np.full(len(keep), "all", object)
@@ -282,6 +282,7 @@ def run(dataset, unit, cfg):
         o.to_parquet(target.with_name(f"{c}.obs.parquet"))
         blocks(o).to_parquet(target.with_name(f"{c}.blocks.parquet"))
         write_json(path(cfg, "manifest", f"{c}.json"), manifest(c, o, dataset, adapter, drops, gate_log, uns))
+    path(cfg, "genes").mkdir(exist_ok=True)
     fmap.to_parquet(path(cfg, "genes", f"{dataset}.map.parquet"))
     shutil.rmtree(tmp)
     inputs = [raw_receipt(cfg, dataset, f)["sha256"] for f in adapter.meta.get("files", []) if Path(f).is_file()]
