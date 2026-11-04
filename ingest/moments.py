@@ -1,6 +1,7 @@
 """Moments stage: float64 sums per perturbation and per control batch, in spaces A, B, C, for all/A/B halves and both profiles."""
 import argparse
 import hashlib
+import re
 import sys
 import time
 from pathlib import Path
@@ -156,7 +157,7 @@ def run(context, cfg):
                     if n >= min_cells:
                         pert.add(key, p, hname, per_gene, [s[0] for s in scal])
                     if hname == "all":
-                        qc_rows.append(dict(key, profile=p, n=n, **guide_agreement(c, xc, L[rows], bt, guides, inc, ctrl_mean[p], g0[p], kappa),
+                        qc_rows.append(dict(key, profile=p, n=n, **guide_agreement(c, xc, L[rows], bt, guides, inc, ctrl_mean[p], g0[p], kappa, min_cells),
                                             **knockdown(label, xb, bt, inc, targets, tcols, ctrl_xb_target, p, cfg, context)))
         out.mkdir(parents=True, exist_ok=True)
         pert_index = pert.write(out / "pert_moments.h5")
@@ -171,22 +172,32 @@ def run(context, cfg):
     print(f"{context}: {len(pert_index)} perturbation rows, {len(ctrl_index)} control rows, {round(time.time() - started)} s", flush=True)
 
 
-def guide_agreement(c, xc, L, bt, guides, inc, ctrl_mean, g0, kappa):
-    """Pearson r over G0 between the C-space deltas of the perturbation's guides (min and mean); NaN with fewer than two guides."""
-    u = [g for g in np.unique(guides[inc]) if g not in ("", "nan", "None")]
-    if len(u) < 2:
-        return dict(n_guides=len(u), guide_r_min=np.nan, guide_r_mean=np.nan)
+CONTROL_PART = re.compile(r"negctrl|non.?target|safe.?target|^nt$|^ctrl", re.I)
+
+
+def guide_key(guide):
+    """Targeting components of a construct id (parts split on | or ;), so a non-targeting partner does not create a new guide."""
+    parts = [p for p in re.split(r"[|;]", guide) if not CONTROL_PART.search(p.strip())]
+    return "|".join(parts) if parts else guide
+
+
+def guide_agreement(c, xc, L, bt, guides, inc, ctrl_mean, g0, kappa, min_cells, max_guides=6):
+    """Pearson r over G0 between the C-space deltas of the perturbation's guides (min and mean over the largest guides); NaN below two guides."""
+    keys = np.array([guide_key(g) for g in guides], object)
+    sizes = pd.Series(keys[inc]).value_counts()
+    sizes = sizes[~sizes.index.isin(["", "nan", "None"])]
+    used = sizes[sizes >= min_cells].head(max_guides)
+    if len(used) < 2:
+        return dict(n_guides=int(len(sizes)), n_guides_used=int(len(used)), guide_r_min=np.nan, guide_r_mean=np.nan)
     deltas = []
-    for g in u:
-        sel = inc & (guides == g)
-        if sel.sum() == 0:
-            continue
+    for g in used.index:
+        sel = inc & (keys == g)
         mean = np.asarray(xc[sel].mean(0)).ravel()
         w = pd.Series(bt[sel]).value_counts(normalize=True)
-        ref = sum(w[b] * ctrl_mean[(b, "all")][2] for b in w.index)
+        ref = sum(w[b] * ctrl_mean[(b, "all")][2] for b in w.index if (b, "all") in ctrl_mean)
         deltas.append((mean - ref)[g0])
     r = [np.corrcoef(deltas[i], deltas[j])[0, 1] for i in range(len(deltas)) for j in range(i + 1, len(deltas))]
-    return dict(n_guides=len(u), guide_r_min=float(np.nanmin(r)) if r else np.nan, guide_r_mean=float(np.nanmean(r)) if r else np.nan)
+    return dict(n_guides=int(len(sizes)), n_guides_used=int(len(used)), guide_r_min=float(np.nanmin(r)), guide_r_mean=float(np.nanmean(r)))
 
 
 def knockdown(label, xb, bt, inc, targets, tcols, ctrl_xb_target, profile, cfg, context):
