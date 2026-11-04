@@ -1,0 +1,105 @@
+version: v1
+seed: 0
+kappa: 10000.0
+pseudocount: 1
+log: natural
+
+paths:
+  vcc_data: /cluster/work/boeva/VCC/VCC2026/data
+  vcc_rscript: /cluster/work/boeva/VCC/VCC2026/.pixi/envs/default/bin/Rscript
+  repo_data: /cluster/work/boeva/virtual_cell_reasoning/data
+  hgnc: /cluster/work/boeva/VCC/VCC2026/data/raw/hgnc/hgnc_complete_set_2026-10-06.txt
+  python: /cluster/work/boeva/akalygina/conda/envs/vcell/bin/python
+
+fetch:
+  proxy: http://localhost:48080
+  files_at_once: 6
+  parts_per_file: 8
+
+genes:
+  ensembl_release: 112
+  gtf: raw/ensembl112/Homo_sapiens.GRCh38.112.gtf.gz
+  primary_assembly_only: true
+  neighbor_window_bp: 5000
+  mito_prefix: MT-
+
+qc:
+  min_genes: 500
+  max_pct_mito: 20.0
+  min_guide_umi: 20
+  min_umi: 1000
+  g0_control_detection_fraction: 0.05
+  lane_flags:
+    gse295214__hESC: [GSM8943771_jan_4_GEX_D2_sg_E11]
+
+profiles:
+  authors: []
+  strict: [qc_genes_500, qc_mito_20, qc_guide_20]
+
+populations:
+  min_cells_for_moments: 5
+  min_controls_per_batch_floor: 5
+  n_eff_flag_ratio: 4
+  n_cells_flag: 20
+  mwu_control_sample: 5000
+
+halves:
+  names: [all, A, B]
+
+lib_size:
+  author_total_when_partial: [replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, cd4t, vcc2025_h1, viperturb]
+
+controls:
+  is_control_kinds: [non_targeting, safe_targeting, non_targeting+safe_targeting, random_sequence]
+  not_used_kinds: [unassigned, non_targeting_spike_in]
+  including_unassigned: [feng]
+
+hesc_guide_min_umi: 20
+
+perturbation_direction:
+  default: down
+  up: [scperturb_norman, joung23_tf_atlas]
+
+cell_rules:
+  default:
+    keep: exactly_one_assigned_construct
+    drop: [no_guide, multi_guide]
+  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20]
+  high_moi_combinations_kept: [scperturb_sunshine]
+  feng:
+    keep: [exactly_one_guide, unassigned_as_controls]
+  dld1:
+    keep: low_moi_singlets
+  authority:
+    default: every checked paper except Feng excludes guide-less cells and treats undesigned multi-guide cells as doublets; Anna 2026-11-04
+    scperturb_sunshine: high-MOI multi-target design kept as combinations with n_targets (reference_dataset.md section 9; Anna 2026-11-04 review)
+    scperturb_frangieh: multi-guide cells dropped (Anna 2026-11-04 evening)
+    hesc: Pan et al. 2026, exactly one sgRNA with at least 20 barcode counts
+    cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
+    feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
+    dld1: Yeung et al. 2026, low-MOI singlets are the reference
+
+shard:
+  bucket_rows: 65536
+  chunk_cells: 20000
+  gene_block_nnz: 200000000
+  compression: gzip
+  compression_level: 4
+  chunk_elements: 1048576
+
+moments:
+  chunk_cells: 50000
+  chunk_nnz: 300000000
+  h5_chunks: [32, 2048]
+
+slurm:
+  partition: compute
+  max_concurrent: 20
+  caps: {shard: 4, shard_large: 3, moments: 12, deltas: 12, validate: 24}
+  time: {default: "24:00:00", shard_large: "7-00:00:00"}
+  memory_gb:
+    default: 24
+    shard: {cd4t: 48, orion_hct116: 32, orion_hek293t: 32, kolf: 16, feng: 32, replogle22_gwps: 24, hesc: 24, viperturb: 48}
+    moments: {orion_hct116: 64, orion_hek293t: 64, cd4t: 48, kolf: 48, replogle22_gwps: 32}
+  large_shards: [orion_hct116, orion_hek293t, kolf, cd4t]
+  rerun_memory_factor: 1.3

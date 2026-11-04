@@ -1,0 +1,61 @@
+ensembl112:
+  - url: https://ftp.ensembl.org/pub/release-112/gtf/homo_sapiens/Homo_sapiens.GRCh38.112.gtf.gz
+schmidt22_t_crispra:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE190nnn/GSE190604/suppl/GSE190604_matrix.mtx.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE190nnn/GSE190604/suppl/GSE190604_barcodes.tsv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE190nnn/GSE190604/suppl/GSE190604_features.tsv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE190nnn/GSE190604/suppl/GSE190604_cellranger-guidecalls-aggregated-unfiltered.txt.gz
+hspc25_multiome:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_annotated_metadata.csv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep1_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep2_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep3_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep4_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep5_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep6_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep7_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep8_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep10_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep12_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep13_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep14_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_rep16_filtered_feature_bc_matrix.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_1.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_2.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_3.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_4.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_5.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_6.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_7.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_8.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_9.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_10.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_12.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_13.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_14.h5
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE274nnn/GSE274113/suppl/GSE274113_filtered_feature_bc_matrix_16.h5
+shifrut18_t_crisprko:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE119nnn/GSE119450/suppl/GSE119450_RAW.tar
+tian21_neurons:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE152nnn/GSE152988/suppl/GSE152988_RAW.tar
+drager22_microglia:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE178nnn/GSE178317/suppl/GSE178317_RAW.tar
+papalexi21_thp1:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE153nnn/GSE153056/suppl/GSE153056_RAW.tar
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE153nnn/GSE153056/suppl/GSE153056_ECCITE_metadata.tsv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE153nnn/GSE153056/suppl/GSE153056_ECCITE_Arrayed_metadata.tsv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE153nnn/GSE153056/suppl/GSE153056_CITE_metadata.tsv.gz
+wessels23_hek293ft:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE213nnn/GSE213957/suppl/GSE213957_HEX293FT_and_SpeciesMixing_CaRPool-seq.tar.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE213nnn/GSE213957/suppl/GSE213957_HEX293FT_CaRPool-seq.metadata.tsv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE213nnn/GSE213957/suppl/GSE213957_HEX293FTstabRNA.metadata.tsv.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE213nnn/GSE213957/suppl/GSE213957_Perturb-seq.tar.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE213nnn/GSE213957/suppl/GSE213957_THP1-CaRPool-seq_and_GSE213957_HEX293FTstabRNA.tar.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE213nnn/GSE213957/suppl/GSE213957_THP1-CaRPool-seq.metadata.tsv.gz
+adamson16_other_lanes:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE90nnn/GSE90546/suppl/GSE90546_RAW.tar
+joung23_tf_atlas:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE217nnn/GSE217460/suppl/GSE217460_210322_TFAtlas_raw.h5ad.gz
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE217nnn/GSE217460/suppl/GSE217460_210322_TFAtlas_differentiated_raw.h5ad.gz
+mccutcheon23_cd8t:
+  - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE218nnn/GSE218988/suppl/GSE218988_RAW.tar

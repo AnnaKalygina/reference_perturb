@@ -1,0 +1,6 @@
+{
+ "source": "https://github.com/satijalab/seurat/raw/master/data/cc.genes.updated.2019.rda (Tirosh et al. 2016 lists, Seurat 2019 update)",
+ "converted": "Rscript load + write.table",
+ "sha256": "364f5f44f9bd2051a55147ae7cceadf6a584742a93d286e9172022374bec4a24",
+ "created": "2026-11-04T21:41:59"
+}

@@ -1,0 +1,7 @@
+{
+ "source": "raw/ensembl112/Homo_sapiens.GRCh38.112.gtf.gz",
+ "receipt": "receipts/raw/ensembl112/Homo_sapiens.GRCh38.112.gtf.gz.json",
+ "rule": "gene records on chromosomes 1-22, X, Y, MT; tss = start on +, end on -",
+ "sha256": "9d3c0fc4dd90bf031e346a41fe0c250364b718d2c196fbd628d44638f754a0dd",
+ "created": "2026-11-04T21:41:59"
+}

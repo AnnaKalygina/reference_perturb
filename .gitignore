@@ -1,0 +1,15 @@
+raw/
+shards/
+suffstats/
+deltas/
+scores/
+validation/
+manifest/
+receipts/
+tmp/
+logs/
+genes/*.parquet
+manifest.parquet
+status.parquet
+__pycache__/
+.pytest_cache/

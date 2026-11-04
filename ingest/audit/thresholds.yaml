@@ -1,0 +1,36 @@
+seed: 0
+out_dir: /cluster/work/boeva/akalygina/reference_audit
+repo_data: /cluster/work/boeva/virtual_cell_reasoning/data
+vcc_data: /cluster/work/boeva/VCC/VCC2026/data
+vcc_root: /cluster/work/boeva/VCC/VCC2026
+vcc_rscript: /cluster/work/boeva/VCC/VCC2026/.pixi/envs/default/bin/Rscript
+hgnc: /cluster/work/boeva/VCC/VCC2026/data/raw/hgnc/hgnc_complete_set_2026-10-06.txt
+k562_essential: /cluster/work/boeva/VCC/VCC2026/data/raw/replogle2022/K562_essential_raw_singlecell_01.h5ad
+control_bins: [20, 50, 100]
+min_control_candidates: [5, 10, 20, 30, 50, 100]
+min_cells_per_perturbation: 10
+integer_sample_values: 2000000
+hesc_guide_min_umi: 20
+controls_including_unassigned: [feng]
+n_eff_flag_ratio: 4
+control_kinds_not_used: [unassigned, non_targeting_spike_in]
+ingestion_cell_rules:
+  default:
+    keep: exactly_one_assigned_construct
+    drop: [no_guide, multi_guide]
+    record_dropped_per_batch: true
+    authority: "every checked paper except Feng excludes guide-less cells and treats undesigned multi-guide cells as doublets or excludes them; Anna 2026-11-04: keep unassigned cells only where the authors use them as controls"
+  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20]
+  feng:
+    keep: [exactly_one_guide, unassigned_as_controls]
+    authority: "Feng et al. 2026 Cell Genomics: unassigned + non-targeting cells are the control set; Anna 2026-11-04"
+  cd4t:
+    keep: exactly_one_guide
+    drop: [no_guide, multi_guide]
+    authority: "Zhu et al. 2026 Cell, Methods: cells with multi_sgRNA or no detectable gRNA excluded; Anna 2026-11-04"
+  dld1:
+    keep: low_moi_singlets
+    authority: "Yeung et al. 2026: singlets of the low-MOI library are the reference; multiplets only in their joint model"
+  scperturb_frangieh:
+    keep: exactly_one_guide
+    open_question: "authors' regression uses the sgRNA assignment matrix and may keep multi-guide cells; MOI 0.1; not stated in the methods"
