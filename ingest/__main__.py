@@ -101,7 +101,7 @@ def submit(cfg, stage, datasets, dependency=None):
         large = stage == "shard" and dataset in cfg["slurm"]["large_shards"]
         t = cfg["slurm"]["time"]["shard_large" if large else "default"]
         cmd = ["sbatch", "--parsable", f"--job-name={name}", f"--mem={memory_gb(cfg, stage, dataset)}G", f"--time={t}", f"--partition={cfg['slurm']['partition']}"]
-        dep = dependency.get(unit if stage != "moments" and stage != "scores" else dataset) if dependency else None
+        dep = dependency.get(unit) if dependency else None
         if dep:
             cmd.append(f"--dependency=afterok:{dep}")
         cmd += ["slurm/stage.sbatch", stage] + ([dataset, "--unit", unit] if stage == "shard" else [unit])
