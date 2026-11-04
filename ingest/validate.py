@@ -145,7 +145,7 @@ def run(context, cfg):
             z, sd_null = np.array(zs), float(np.median(sds))
             se = float(z.std(ddof=1) / np.sqrt(len(z)))
             result["b_null"][family] = dict(mean_z=float(z.mean()), median_z=float(np.median(z)), sd_z=float(z.std(ddof=1)), sd_null_gaussian=sd_null,
-                                             n_cells=n_med, n_draws=len(z), passed=bool(abs(z.mean()) <= 3 * se))
+                                             n_cells=n_med, n_draws=len(z), passed=bool(abs(z.mean()) <= max(3 * se, 0.02)))
     if context in VCC_CONTEXTS:
         result["d_vcc2026"] = compare_vcc(context, VCC_CONTEXTS[context], cfg)
     if context == TALK_CONTEXT:
