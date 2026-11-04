@@ -34,7 +34,7 @@ def commit():
     """(short commit, dirty flag) of the checkout, or ('none', True) outside git."""
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, capture_output=True, text=True).stdout.strip() != ""
+        dirty = subprocess.run(["git", "--no-optional-locks", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, capture_output=True, text=True).stdout.strip() != ""
         return sha, dirty
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "none", True
