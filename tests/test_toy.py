@@ -58,7 +58,7 @@ def test_row_order_and_values(built):
 def test_gate_and_rules(built):
     o = pd.read_parquet(built["root"] / "shards/toy/toy__ctx.obs.parquet")
     assert set(o[o.kind == "combo"].perturbation) == {"TOYG01+TOYG02"}
-    assert o[o.kind == "single"].perturbation.isin(["TOYG01", "TOYG02", "TOYG03", "TOYG04", "TOYG05"]).all()
+    assert o[o.kind == "single"].perturbation.isin(["TOYG01", "TOYG02", "TOYG03", "TOYG04", "TOYG05", "TOYG06"]).all()
     assert (o[o.kind == "combo"].n_targets == 2).all()
 
 
@@ -118,7 +118,8 @@ def test_knockdown_direction(built):
     q = qc[(qc.profile == "authors") & (qc.half == "all")].set_index("perturbation")
     assert q.loc["TOYG04", "knockdown_ratio"] == 0 and q.loc["TOYG04", "knockdown_p"] < 0.05
     assert q.loc["TOYG01", "knockdown_ratio"] < 0.8
-    assert np.isclose(q.loc["TOYG01", "guide_r_min"], q.loc["TOYG01", "guide_r_mean"])
+    assert q.loc["TOYG01", "n_guides"] == 2 and q.loc["TOYG01", "n_guides_used"] == 0 and np.isnan(q.loc["TOYG01", "guide_r_min"])
+    assert q.loc["TOYG06", "n_guides_used"] == 2 and np.isclose(q.loc["TOYG06", "guide_r_min"], q.loc["TOYG06", "guide_r_mean"])
 
 
 def test_g0_and_masks(built):

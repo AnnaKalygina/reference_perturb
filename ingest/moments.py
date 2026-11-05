@@ -4,6 +4,7 @@ import hashlib
 import re
 import sys
 import time
+from contextlib import ExitStack
 from pathlib import Path
 
 import h5py
@@ -20,6 +21,7 @@ SUMS = ["n", "sum_c", "sum_c2", "sum_xB", "sum_xB2", "sum_xC", "sum_xC2"]
 SCALARS = ["n", "sum_L", "sum_L2", "sum_invL"]
 HALVES = ["all", "A", "B"]
 PROFILES = ["authors", "strict"]
+ROWS_PER_FLUSH = 32
 
 
 def read_rows(x, start, end):
@@ -50,23 +52,40 @@ def group_sums(c, xb, xc, L, groups, n_groups):
 
 
 class Table:
-    """Rows of sums appended per population, written as HDF5 datasets per profile, half and sum."""
+    """Rows of sums per population, buffered 32 at a time into resizable HDF5 datasets per profile, half and sum."""
 
-    def __init__(self, n_genes, cfg):
-        self.rows, self.index, self.g, self.cfg = {}, [], n_genes, cfg
+    def __init__(self, n_genes, cfg, target):
+        self.index, self.g, self.buf, self.n_rows = [], n_genes, {}, {}
+        self.stack = ExitStack()
+        self.h = self.stack.enter_context(h5py.File(self.stack.enter_context(write_atomic(target)), "w"))
+        self.h.attrs["config_hash"], self.h.attrs["code_commit"] = cfg["hash"], cfg["commit"]
 
     def add(self, key, profile, half, per_gene, scal):
-        self.index.append(dict(key, profile=profile, half=half, n=scal[0], sum_L=scal[1], sum_L2=scal[2], sum_invL=scal[3], row=len(self.rows.get((profile, half), []))))
-        self.rows.setdefault((profile, half), []).append(np.stack([np.asarray(v).reshape(-1) for v in per_gene]))
+        k = (profile, half)
+        self.index.append(dict(key, profile=profile, half=half, n=scal[0], sum_L=scal[1], sum_L2=scal[2], sum_invL=scal[3], row=self.n_rows.get(k, 0)))
+        self.n_rows[k] = self.n_rows.get(k, 0) + 1
+        self.buf.setdefault(k, []).append(np.stack([np.asarray(v).reshape(-1) for v in per_gene]))
+        if len(self.buf[k]) == ROWS_PER_FLUSH:
+            self.flush(k)
 
-    def write(self, target):
-        opts = dict(compression="gzip", compression_opts=4, shuffle=True)
-        with write_atomic(target) as tmp, h5py.File(tmp, "w") as h:
-            h.attrs["config_hash"], h.attrs["code_commit"] = self.cfg["hash"], self.cfg["commit"]
-            for (profile, half), rows in self.rows.items():
-                block = np.stack(rows)
-                for i, name in enumerate(SUMS[1:]):
-                    h.create_dataset(f"{profile}/{half}/{name}", data=block[:, i, :], chunks=(min(32, len(rows)), min(2048, self.g)), **opts)
+    def flush(self, k):
+        rows = self.buf.pop(k, [])
+        if not rows:
+            return
+        block = np.stack(rows)
+        for i, name in enumerate(SUMS[1:]):
+            d = self.h.get(f"{k[0]}/{k[1]}/{name}")
+            if d is None:
+                d = self.h.create_dataset(f"{k[0]}/{k[1]}/{name}", shape=(0, self.g), maxshape=(None, self.g), dtype=np.float64,
+                                          chunks=(ROWS_PER_FLUSH, min(2048, self.g)), compression="gzip", compression_opts=4, shuffle=True)
+            n0 = d.shape[0]
+            d.resize(n0 + len(rows), axis=0)
+            d[n0:] = block[:, i, :]
+
+    def close(self):
+        for k in list(self.buf):
+            self.flush(k)
+        self.stack.close()
         return pd.DataFrame(self.index)
 
 
@@ -92,9 +111,10 @@ def run(context, cfg):
         half = obs.half.astype(str).to_numpy()
         L = obs.lib_size.to_numpy(np.float64)
         batch = obs.batch.astype(str).to_numpy()
+        guide_all = obs.guide.astype(str).to_numpy()
         ctrl_rows = blocks[(blocks.kind == "control")]
         used = obs.control_used.to_numpy(bool)
-        ctrl = Table(len(measured_col), cfg)
+        ctrl = Table(len(measured_col), cfg, out / "ctrl_batch_moments.h5")
         ctrl_mean = {p: {} for p in PROFILES}
         ctrl_n_half = {}
         detect = {p: np.zeros(len(measured_col)) for p in PROFILES}
@@ -128,18 +148,19 @@ def run(context, cfg):
                     if sc[0][0] > 0:
                         ctrl.add(dict(batch=b), p, hname, pg, [s[0] for s in sc])
                         ctrl_mean[p][(b, hname)] = (pg[0][0] / sc[1][0], pg[2][0] / sc[0][0], pg[4][0] / sc[0][0])
-            ctrl_xb_target[b] = (xb[:, tcols].toarray() if len(tcols) else np.zeros((len(rows), 0)), strict[rows])
+            ctrl_xb_target[b] = (xb[:, tcols].tocsc() if len(tcols) else sp.csc_matrix((len(rows), 0)), strict[rows])
         g0 = {p: detect[p] >= cfg["qc"]["g0_control_detection_fraction"] * max(n_ctrl[p], 1) for p in PROFILES}
-        pert = Table(len(measured_col), cfg)
+        pert = Table(len(measured_col), cfg, out / "pert_moments.h5")
         counts, qc_rows = [], []
         perts = blocks[blocks.kind != "control"]
         for (kind, label), grp in perts.groupby(["kind", "perturbation"], sort=False):
             start, end = int(grp.start.min()), int(grp.end.max())
             rows = np.arange(start, end)
             m = read_rows(x, start, end)
-            c, xb, xc = spaces(m, L[rows], kappa, measured_col)
+            Lr = L[rows]
+            c, xb, xc = spaces(m, Lr, kappa, measured_col)
             bt = batch[rows]
-            guides = obs.guide.astype(str).to_numpy()[rows]
+            guides = guide_all[rows]
             for p in PROFILES:
                 pmask = np.ones(len(rows), bool) if p == "authors" else strict[rows]
                 for hname in HALVES:
@@ -147,24 +168,22 @@ def run(context, cfg):
                     matched = np.array([ctrl_n_half.get((p, b, hname), 0) > 0 for b in bt])
                     inc = hmask & matched
                     excluded = int((hmask & ~matched).sum())
-                    per_gene, scal = group_sums(c, xb, xc, L[rows], np.where(inc, 0, -1), 1)
+                    per_gene, scal = group_sums(c, xb, xc, Lr, np.where(inc, 0, -1), 1)
                     n = int(scal[0][0])
                     for b in np.unique(bt[hmask]):
                         sel = hmask & (bt == b)
-                        counts.append(dict(perturbation=label, kind=kind, batch=b, profile=p, half=hname, n_pb=int((sel & matched).sum()), L_pb=float(L[rows][sel & matched].sum()),
-                                           n_excluded=int((sel & ~matched).sum())))
+                        counts.append((label, kind, b, p, hname, int((sel & matched).sum()), float(Lr[sel & matched].sum()), int((sel & ~matched).sum())))
                     key = dict(perturbation=label, kind=kind, n_excluded=excluded, n_batches=int(len(np.unique(bt[inc]))))
                     if n >= min_cells:
                         pert.add(key, p, hname, per_gene, [s[0] for s in scal])
                     if hname == "all":
-                        qc_rows.append(dict(key, profile=p, n=n, **guide_agreement(c, xc, L[rows], bt, guides, inc, ctrl_mean[p], g0[p], kappa, min_cells),
+                        qc_rows.append(dict(key, profile=p, n=n, **guide_agreement(c, xc, Lr, bt, guides, inc, ctrl_mean[p], g0[p], kappa, min_cells),
                                             **knockdown(label, xb, bt, inc, targets, tcols, ctrl_xb_target, p, cfg, context)))
-        out.mkdir(parents=True, exist_ok=True)
-        pert_index = pert.write(out / "pert_moments.h5")
-        ctrl_index = ctrl.write(out / "ctrl_batch_moments.h5")
+        pert_index = pert.close()
+        ctrl_index = ctrl.close()
         pert_index["table"], ctrl_index["table"] = "pert", "ctrl"
         pd.concat([pert_index, ctrl_index], ignore_index=True).to_parquet(out / "index.parquet")
-        pd.DataFrame(counts).to_parquet(out / "cell_counts.parquet")
+        pd.DataFrame(counts, columns=["perturbation", "kind", "batch", "profile", "half", "n_pb", "L_pb", "n_excluded"]).to_parquet(out / "cell_counts.parquet")
         pd.DataFrame(qc_rows).to_parquet(out / "guide_knockdown.parquet")
         pd.DataFrame(dict(ensembl_id=gene_ids[measured_col], axis_index=measured_col, g0_authors=g0["authors"], g0_strict=g0["strict"],
                           detected_controls_authors=detect["authors"], detected_controls_strict=detect["strict"])).to_parquet(out / "genes.parquet")
@@ -218,7 +237,8 @@ def knockdown(label, xb, bt, inc, targets, tcols, ctrl_xb_target, profile, cfg, 
         total = cfg["populations"]["mwu_control_sample"]
         for b in w.index:
             cx, cs = ctrl_xb_target[b]
-            cx = cx[:, col] if profile == "authors" else cx[cs, col]
+            cx = cx[:, col].toarray().ravel()
+            cx = cx if profile == "authors" else cx[cs]
             if len(cx) == 0:
                 continue
             ref += w[b] * cx.mean()

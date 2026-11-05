@@ -60,18 +60,18 @@ def run(context, cfg):
                 theta_c = c_sum_c / ci.sum_L.to_numpy()[:, None]
                 mean_c = c_sum_xc / ci.n.to_numpy()[:, None]
                 perts = pi.perturbation.tolist()
-                wn = weights(cnt, perts, batches, "n_pb")
-                wl = weights(cnt, perts, batches, "L_pb")
-                ref_c = np.asarray(wn @ mean_c)
-                ref_a = np.asarray(wl @ theta_c)
+                wn = weights(cnt, perts, batches, "n_pb").tocsr()
+                wl = weights(cnt, perts, batches, "L_pb").tocsr()
                 ga = ho.create_dataset(f"{profile}/{half}/dA", shape=(len(pi), theta_c.shape[1]), dtype=np.float32, chunks=(min(32, len(pi)), min(2048, theta_c.shape[1])), **opts)
                 gc = ho.create_dataset(f"{profile}/{half}/dC", shape=(len(pi), theta_c.shape[1]), dtype=np.float32, chunks=(min(32, len(pi)), min(2048, theta_c.shape[1])), **opts)
                 for s in range(0, len(pi), BLOCK):
                     rows = pi.iloc[s:s + BLOCK]
                     sum_c = hp[f"{profile}/{half}/sum_c"][s:s + len(rows)]
                     sum_xc = hp[f"{profile}/{half}/sum_xC"][s:s + len(rows)]
-                    ga[s:s + len(rows)] = np.log1p(kappa * sum_c / rows.sum_L.to_numpy()[:, None]) - np.log1p(kappa * ref_a[s:s + len(rows)])
-                    gc[s:s + len(rows)] = sum_xc / rows.n.to_numpy()[:, None] - ref_c[s:s + len(rows)]
+                    ref_c = np.asarray(wn[s:s + len(rows)] @ mean_c)
+                    ref_a = np.asarray(wl[s:s + len(rows)] @ theta_c)
+                    ga[s:s + len(rows)] = np.log1p(kappa * sum_c / rows.sum_L.to_numpy()[:, None]) - np.log1p(kappa * ref_a)
+                    gc[s:s + len(rows)] = sum_xc / rows.n.to_numpy()[:, None] - ref_c
         for profile in PROFILES:
             for half in HALVES:
                 cnt = counts[(counts.profile == profile) & (counts.half == half)]

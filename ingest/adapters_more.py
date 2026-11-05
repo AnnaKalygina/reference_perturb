@@ -277,7 +277,7 @@ class GeneMajor(Adapter):
 
     def chunks(self, unit):
         n = self.n_cells()
-        tmp = path(self.cfg, "tmp", self.dataset, "transpose")
+        tmp = path(self.cfg, "tmp", self.dataset, f"transpose_{unit}")
         if tmp.exists():
             shutil.rmtree(tmp)
         tmp.mkdir(parents=True)
