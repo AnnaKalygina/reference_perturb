@@ -54,6 +54,8 @@ def run(context, cfg):
                 cnt = counts[(counts.profile == profile) & (counts.half == half)]
                 ctrl_n = dict(zip(ci.batch, ci.n))
                 if len(pi) == 0:
+                    for name in ("dA", "dC"):
+                        ho.create_dataset(f"{profile}/{half}/{name}", shape=(0, hc[f"{profile}/{half}/sum_c"].shape[1]), dtype=np.float32)
                     continue
                 batches = ci.batch.tolist()
                 c_sum_c, c_sum_xc = hc[f"{profile}/{half}/sum_c"][:], hc[f"{profile}/{half}/sum_xC"][:]

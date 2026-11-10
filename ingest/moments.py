@@ -54,8 +54,8 @@ def group_sums(c, xb, xc, L, groups, n_groups):
 class Table:
     """Rows of sums per population, buffered 32 at a time into resizable HDF5 datasets per profile, half and sum."""
 
-    def __init__(self, n_genes, cfg, target):
-        self.index, self.g, self.buf, self.n_rows = [], n_genes, {}, {}
+    def __init__(self, n_genes, cfg, target, keys):
+        self.index, self.g, self.buf, self.n_rows, self.keys = [], n_genes, {}, {}, keys
         self.stack = ExitStack()
         self.h = self.stack.enter_context(h5py.File(self.stack.enter_context(write_atomic(target)), "w"))
         self.h.attrs["config_hash"], self.h.attrs["code_commit"] = cfg["hash"], cfg["commit"]
@@ -74,19 +74,24 @@ class Table:
             return
         block = np.stack(rows)
         for i, name in enumerate(SUMS[1:]):
-            d = self.h.get(f"{k[0]}/{k[1]}/{name}")
-            if d is None:
-                d = self.h.create_dataset(f"{k[0]}/{k[1]}/{name}", shape=(0, self.g), maxshape=(None, self.g), dtype=np.float64,
-                                          chunks=(ROWS_PER_FLUSH, min(2048, self.g)), compression="gzip", compression_opts=4, shuffle=True)
+            d = self.dataset(k, name)
             n0 = d.shape[0]
             d.resize(n0 + len(rows), axis=0)
             d[n0:] = block[:, i, :]
 
+    def dataset(self, k, name):
+        """The resizable dataset of one profile, half and sum, created on first use."""
+        return self.h.get(f"{k[0]}/{k[1]}/{name}") or self.h.create_dataset(f"{k[0]}/{k[1]}/{name}", shape=(0, self.g), maxshape=(None, self.g), dtype=np.float64,
+                                                                           chunks=(ROWS_PER_FLUSH, min(2048, self.g)), compression="gzip", compression_opts=4, shuffle=True)
+
     def close(self):
         for k in list(self.buf):
             self.flush(k)
+        for k in [(p, h) for p in PROFILES for h in HALVES]:
+            for name in SUMS[1:]:
+                self.dataset(k, name)
         self.stack.close()
-        return pd.DataFrame(self.index)
+        return pd.DataFrame(self.index, columns=[*self.keys, "profile", "half", "n", "sum_L", "sum_L2", "sum_invL", "row"])
 
 
 def run(context, cfg):
@@ -114,7 +119,7 @@ def run(context, cfg):
         guide_all = obs.guide.astype(str).to_numpy()
         ctrl_rows = blocks[(blocks.kind == "control")]
         used = obs.control_used.to_numpy(bool)
-        ctrl = Table(len(measured_col), cfg, out / "ctrl_batch_moments.h5")
+        ctrl = Table(len(measured_col), cfg, out / "ctrl_batch_moments.h5", ["batch"])
         ctrl_mean = {p: {} for p in PROFILES}
         ctrl_n_half = {}
         detect = {p: np.zeros(len(measured_col)) for p in PROFILES}
@@ -150,7 +155,7 @@ def run(context, cfg):
                         ctrl_mean[p][(b, hname)] = (pg[0][0] / sc[1][0], pg[2][0] / sc[0][0], pg[4][0] / sc[0][0])
             ctrl_xb_target[b] = (xb[:, tcols].tocsc() if len(tcols) else sp.csc_matrix((len(rows), 0)), strict[rows])
         g0 = {p: detect[p] >= cfg["qc"]["g0_control_detection_fraction"] * max(n_ctrl[p], 1) for p in PROFILES}
-        pert = Table(len(measured_col), cfg, out / "pert_moments.h5")
+        pert = Table(len(measured_col), cfg, out / "pert_moments.h5", ["perturbation", "kind", "n_excluded", "n_batches"])
         counts, qc_rows = [], []
         perts = blocks[blocks.kind != "control"]
         for (kind, label), grp in perts.groupby(["kind", "perturbation"], sort=False):

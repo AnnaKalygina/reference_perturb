@@ -114,10 +114,10 @@ def run(context, cfg):
             direct = first_form_delta(v, batch[s:e], ctrl.mean)
             sto = dC[int(stored[stored.perturbation == p].delta_row.iloc[0])].astype(np.float64)
             excess.append(float(np.max(np.abs(direct - sto) - 1e-6 * np.abs(sto))))
-        result["a_recompute"] = dict(n=len(pick), max_excess_over_tolerance=max(excess) if excess else None, passed=bool(excess and max(excess) <= 1e-6))
+        result["a_recompute"] = dict(n=len(pick), max_excess_over_tolerance=max(excess) if excess else None, passed=bool(max(excess) <= 1e-6) if excess else None)
         n_med = int(np.median(stored.n)) if len(stored) else 20
         result["b_null"] = {}
-        for family in ("control_mix", "perturbation_mix"):
+        for family in (("control_mix", "perturbation_mix") if len(stored) else ("control_mix",)):
             rng = rng_for(cfg, context, f"null_{family}")
             zs, sds = [], []
             for _ in range(50):
