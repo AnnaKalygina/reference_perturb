@@ -13,6 +13,7 @@ from config import load, path  # noqa: E402
 
 STAGES = ["shard", "moments", "deltas", "validate", "scores"]
 UPSTREAM = {"moments": "shard", "deltas": "moments", "validate": "deltas", "scores": "shard"}
+WORKERS = {"scores": 8}
 
 
 def contexts_of(cfg):
@@ -82,7 +83,7 @@ def status(cfg):
 
 
 def memory_gb(cfg, stage, dataset):
-    """Config default per (stage, dataset), raised to 1.3 x the largest observed peak of the same (stage, dataset)."""
+    """Per-worker memory: config default per (stage, dataset), raised to 1.3 x the largest observed peak of the same (stage, dataset)."""
     m = cfg["slurm"]["memory_gb"]
     base = m.get(stage, {}).get(dataset, m["default"]) if isinstance(m.get(stage), dict) else m["default"]
     peaks = [json.loads(p.read_text()).get("peak_rss_gb", 0) for p in path(cfg, "receipts", "outputs", stage).glob(f"{dataset}*.json")] if path(cfg, "receipts", "outputs", stage).exists() else []
@@ -111,7 +112,8 @@ def submit(cfg, stage, datasets, dependency=None):
             continue
         large = stage == "shard" and dataset in cfg["slurm"]["large_shards"]
         t = cfg["slurm"]["time"]["shard_large" if large else "default"]
-        cmd = ["sbatch", "--parsable", f"--job-name={name}", f"--mem={memory_gb(cfg, stage, dataset)}G", f"--time={t}", f"--partition={cfg['slurm']['partition']}"]
+        workers = WORKERS.get(stage, 1)
+        cmd = ["sbatch", "--parsable", f"--job-name={name}", f"--mem={memory_gb(cfg, stage, dataset) * workers}G", f"--cpus-per-task={max(2, workers)}", f"--time={t}", f"--partition={cfg['slurm']['partition']}"]
         dep = dependency.get(unit) if dependency else None
         if dep:
             cmd.append(f"--dependency=afterok:{dep}")

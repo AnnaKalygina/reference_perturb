@@ -98,7 +98,7 @@ def finish(cfg, stage, unit, outputs, inputs, started, extra=None):
 
 
 def peak_rss_gb():
-    """Peak resident set size of this process in GB."""
+    """Peak resident set size of this process or of its largest finished child, in GB."""
     import resource
 
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
+    return max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1e6
