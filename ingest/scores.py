@@ -76,6 +76,7 @@ def run(context, cfg):
                 else:
                     frame["S_score"], frame["G2M_score"], frame["phase"] = np.nan, np.nan, None
             frames.append(frame)
+            print(f"{context}: batch {b} {a.n_obs:,} cells, {round(time.time() - started)} s", flush=True)
     scores = pd.concat(frames).reindex(obs.index.astype(str))
     scores["predicted_doublet"] = scores.predicted_doublet.astype("boolean")
     with write_atomic(out) as tmp:

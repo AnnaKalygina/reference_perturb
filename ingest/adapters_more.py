@@ -1,6 +1,7 @@
 """Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng."""
 import glob
 import gzip
+import itertools
 import re
 import shutil
 import sys
@@ -388,15 +389,14 @@ class Feng(GeneMajor):
         return self._n
 
     def gene_blocks(self):
-        rows_per_block = 256
         with gzip.open(self.dir() / self.FILES[self._unit], "rt") as fh:
             fh.readline()
             g = 0
-            for chunk in pd.read_csv(fh, header=None, chunksize=rows_per_block, engine="c", dtype={0: str}):
-                block = chunk.iloc[:, 1:].to_numpy(np.int32)
+            while rows := [np.fromstring(line[line.index(",") + 1:], dtype=np.int32, sep=",") for line in itertools.islice(fh, 256)]:
+                block = np.stack(rows)
                 r, c = np.nonzero(block)
-                yield c.astype(np.int32), (r + g).astype(np.int32), block[r, c].astype(np.int32)
-                g += block.shape[0]
+                yield c.astype(np.int32), (r + g).astype(np.int32), block[r, c]
+                g += len(rows)
 
 
 ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng]})
