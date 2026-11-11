@@ -27,14 +27,14 @@ def axis_symbols():
     return np.array(ids), np.array(syms)
 
 
-def build_cells(rng):
-    """obs and counts: controls per batch, then perturbations; target of Pk is TOYG(k) whose counts are halved (P1) or zero (P4)."""
+def build_cells(rng, shallow=()):
+    """obs and counts: controls per batch, then perturbations; target of Pk is TOYG(k) whose counts are halved (P1) or zero (P4); shallow batches get a tenth of the depth."""
     rows, obs = [], []
     k = 0
 
     def cell(batch, kind, pert, guide, target_idx=None, factor=1.0):
         nonlocal k
-        L = L_VALUES[k % 3]
+        L = L_VALUES[k % 3] // (10 if batch in shallow else 1)
         base = rng.integers(1, 6, GENES)
         counts = base.astype(float)
         if target_idx is not None:
@@ -69,6 +69,7 @@ def make_root(tmp):
     cfg = yaml.safe_load(open(ROOT / "config" / "ingest.yaml"))
     cfg["qc"]["g0_control_detection_fraction"] = 0.05
     cfg["cell_rules"]["designed_combinations_kept"].append("toy")
+    cfg["reader"]["min_cells_for_effect"] = 5
     yaml.safe_dump(cfg, open(tmp / "config" / "ingest.yaml", "w"))
     ids, syms = axis_symbols()
     pd.DataFrame(dict(ensembl_id=ids[:18], symbol=syms[:18], biotype="protein_coding", chromosome="1", start=np.arange(18) * 10000 + 1,

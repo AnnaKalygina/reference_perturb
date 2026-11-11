@@ -103,3 +103,8 @@ slurm:
     moments: {orion_hct116: 64, orion_hek293t: 64, cd4t: 48, kolf: 48, replogle22_gwps: 32}
   large_shards: [orion_hct116, orion_hek293t, kolf, cd4t]
   rerun_memory_factor: 1.3
+
+reader:
+  batch_depth_low_fraction: 0.5
+  batch_control_shift_mad: 3.0
+  min_cells_for_effect: 20
