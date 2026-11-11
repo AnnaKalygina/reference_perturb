@@ -67,4 +67,32 @@ class Schmidt22(Adapter):
                 yield start, m[:, gex]
 
 
-ADAPTERS.update({a.dataset: a for a in [Schmidt22]})
+class Shifrut18(Adapter):
+    """GEO GSE119450_RAW.tar: four Cell Ranger matrix.mtx read from the nested archives in sample order."""
+
+    dataset, loader = "shifrut18_t_crisprko", staticmethod(sources.shifrut18_t_crisprko)
+
+    def tar(self):
+        return path(self.cfg, "raw", "shifrut18_t_crisprko", "GSE119450_RAW.tar")
+
+    def genes(self, sample):
+        return pd.read_csv(sources.shifrut_sample(self.tar(), sample).extractfile("genes.tsv"), sep="\t", header=None, names=["id", "name"])
+
+    def features(self, unit):
+        g = self.genes(next(iter(sources.SHIFRUT_SAMPLES)))
+        return g.id.to_numpy(), g.name.to_numpy()
+
+    def chunks(self, unit):
+        ref = self.features(unit)[0]
+        start = 0
+        for sample in sources.SHIFRUT_SAMPLES:
+            if not np.array_equal(self.genes(sample).id.to_numpy(), ref):
+                raise SystemExit(f"shifrut18 {sample}: gene list differs from the first sample")
+            fh = sources.shifrut_sample(self.tar(), sample).extractfile("matrix.mtx")
+            n_features, n_cells = mtx_header(fh)
+            for lo, m in mtx_cell_chunks(fh, n_features, n_cells):
+                yield start + lo, m
+            start += n_cells
+
+
+ADAPTERS.update({a.dataset: a for a in [Schmidt22, Shifrut18]})

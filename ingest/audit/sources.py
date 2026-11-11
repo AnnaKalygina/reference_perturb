@@ -641,13 +641,12 @@ SCHMIDT_WELLS = {str(i + 1): w for i, w in enumerate([f"{c}-well{k}" for c in ("
 SCHMIDT_MIN_GUIDE_UMI = 5
 
 
-def mtx_values(path, n):
-    """The first n stored values of a gzipped MatrixMarket file."""
-    with gzip.open(path, "rt") as fh:
+def mtx_values(fh, n):
+    """The first n stored values of a MatrixMarket byte stream."""
+    line = fh.readline()
+    while line.startswith(b"%"):
         line = fh.readline()
-        while line.startswith("%"):
-            line = fh.readline()
-        return np.array([float(fh.readline().split()[2]) for _ in range(n)])
+    return np.array([float(fh.readline().split()[2]) for _ in range(n)])
 
 
 def schmidt22_t_crispra(cfg):
@@ -679,7 +678,56 @@ def schmidt22_t_crispra(cfg):
                 flags=["two blood donors mixed 1:1 in every well; the authors' Souporcell donor calls are not deposited, so donor is unknown per cell",
                        "bulk CD3+ T cells: CD4 and CD8 are not labelled in the deposit",
                        f"{int(((ng == 1) & ~single).sum())} single-sgRNA droplets below {SCHMIDT_MIN_GUIDE_UMI} sgRNA UMIs are unassigned"])
-    return Source("schmidt22_t_crispra", obs, meta, f.name[gex].to_numpy(), f.id[gex].to_numpy(), mtx_values(d / "GSE190604_matrix.mtx.gz", cfg["integer_sample_values"]))
+    return Source("schmidt22_t_crispra", obs, meta, f.name[gex].to_numpy(), f.id[gex].to_numpy(), mtx_values(gzip.open(d / "GSE190604_matrix.mtx.gz", "rb"), cfg["integer_sample_values"]))
+
+
+SHIFRUT_SAMPLES = {"D1N": ("D1", "NoStim"), "D1S": ("D1", "Stim"), "D2N": ("D2", "NoStim"), "D2S": ("D2", "Stim")}
+
+
+def shifrut_sample(tar, sample):
+    """The nested Cell Ranger archive (barcodes.tsv, genes.tsv, matrix.mtx) of one Shifrut sample, opened for random access."""
+    outer = tarfile.open(tar)
+    m = next(x for x in outer.getmembers() if x.name.endswith(f"_{sample}_matrix.tar.gz"))
+    return tarfile.open(fileobj=outer.extractfile(m), mode="r:gz")
+
+
+def shifrut_guide_calls(tar, sample):
+    """The authors' CellBC_sgRNA table of one Shifrut sample, indexed by cell barcode."""
+    with tarfile.open(tar) as outer:
+        m = next(x for x in outer.getmembers() if x.name.endswith(f"_{sample}_CellBC_sgRNA.csv.gz"))
+        return pd.read_csv(gzip.open(outer.extractfile(m), "rt")).set_index("Cell.BC")
+
+
+def shifrut18_t_crisprko(cfg):
+    """Shifrut 2018 SLICE CROP-seq in primary CD8+ T cells (GEO GSE119450_RAW.tar): four Cell Ranger samples + the authors' guide calls."""
+    tar = Path(cfg["root"]) / "raw/shifrut18_t_crisprko/GSE119450_RAW.tar"
+    parts, genes, vals = [], None, None
+    for sample, (donor, cond) in SHIFRUT_SAMPLES.items():
+        inner = shifrut_sample(tar, sample)
+        bc = pd.read_csv(inner.extractfile("barcodes.tsv"), header=None)[0].str.split("-").str[0]
+        if genes is None:
+            genes = pd.read_csv(inner.extractfile("genes.tsv"), sep="\t", header=None, names=["id", "name"])
+            vals = mtx_values(inner.extractfile("matrix.mtx"), cfg["integer_sample_values"])
+        calls = shifrut_guide_calls(tar, sample).reindex(bc)
+        target = calls["gRNA.ID"].astype(str).str.split(".").str[2].to_numpy()
+        assigned = calls["gRNA.ID"].notna().to_numpy()
+        is_ctrl = assigned & (target == "NonTarget")
+        parts.append(frame(len(bc), context=ctx("shifrut18_t_crisprko", "CD8T", cond), cell_type="primary CD8+ T", condition=cond, timepoint="36h",
+                           donor=donor, batch=f"{donor}_{cond}", perturbation=np.where(assigned & ~is_ctrl, target, ""), is_control=is_ctrl,
+                           control_kind=np.where(is_ctrl, "non_targeting", None), guide=calls["gRNA.ID"].to_numpy(), n_guides=assigned.astype(int)))
+        parts[-1]["guide_umi"] = calls["UMI.count"].to_numpy()
+    obs = pd.concat(parts, ignore_index=True)
+    meta = dict(deposit="GEO GSE119450_RAW.tar: GSM3375483-86 {D1N,D1S,D2N,D2S}_matrix.tar.gz (Cell Ranger 2.0 filtered) + GSM3375487-90 CellBC_sgRNA.csv.gz",
+                files=[str(tar)], batch_field="GEO sample = donor x condition (one 10x lane each; sample.name of the guide table)",
+                batch_kind="technical (lane), one lane per donor; donors D1/D2 are the authors' biological replicates",
+                modality="CRISPRko (Cas9 RNP electroporation, SLICE; CROP-seq sgRNA capture)", cell_calling="authors (Cell Ranger 2.0 default filter)",
+                guide_assignment="authors' CellBC_sgRNA tables (U6 reamplification reads; cells with more than one assigned guide removed by the authors): "
+                                 "one guide per listed barcode, barcodes without a row are unassigned",
+                matrix="matrix.mtx integer per sample", gene_ids="Cell Ranger GRCh38 (Ensembl ids + symbols, 33,694 genes)",
+                flags=["guide UMI.count is 1 for about two thirds of the assigned cells",
+                       "the paper also keeps only cells with more than 500 genes (qc_genes_500 flag, not applied)",
+                       "about a third of the guide-table barcodes are absent from the Cell Ranger filtered matrices"])
+    return Source("shifrut18_t_crisprko", obs, meta, genes.name.to_numpy(), genes.id.to_numpy(), vals)
 
 
 def xatlas_repo(cfg):
@@ -701,4 +749,4 @@ def xatlas_repo(cfg):
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
                                    replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, replogle20,
                                    orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb,
-                                   schmidt22_t_crispra]}
+                                   schmidt22_t_crispra, shifrut18_t_crisprko]}
