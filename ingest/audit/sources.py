@@ -4,6 +4,8 @@ import gzip
 import json
 import re
 import subprocess
+import tarfile
+import zipfile
 from pathlib import Path
 
 import h5py
@@ -457,7 +459,7 @@ CONTROL_RE = re.compile(r"^(non[-_]?targeting|ntc|negative|neg)", re.I)
 
 def hesc(cfg):
     """GEO GSE295214 hESC, 85 Cell Ranger h5; per-sgRNA calls by the authors' rule (no author calls on disk)."""
-    min_umi = cfg["hesc_guide_min_umi"]
+    min_umi = cfg["guide_call_min_umi"]["hesc"]
     files = sorted(glob.glob(str(Path(cfg["vcc_data"]) / "raw/gse295214/GSM*_filtered_feature_bc_matrix.h5")))
     parts, genome = [], None
     for fp in files:
@@ -503,6 +505,56 @@ def hesc(cfg):
                 flags=["no author guide calls on disk: check GEO supplementary for protospacer_calls before ingestion",
                        f"{int(gex.sum())} gene features (more than one reference?)"])
     return Source("gse295214", obs, meta, names[gex], ids[gex], tenx_values(files[0], cfg["integer_sample_values"]))
+
+
+def tian21_lanes(tar, arm):
+    """Cell Ranger h5 members of one Tian 2021 arm in lane order."""
+    return sorted((m for m in tar.getmembers() if f"_{arm}_" in m.name), key=lambda m: m.name)
+
+
+def tian21_neurons(cfg, name, arm):
+    """Tian 2021 CROP-seq in iPSC-derived neurons: GEO lane h5 inside GSE152988_RAW.tar + the authors' single-sgRNA maps (maps.zip)."""
+    d = Path(cfg["root"]) / "raw/tian21_neurons"
+    maps = zipfile.ZipFile(d / "maps.zip")
+    parts, outside = [], 0
+    with tarfile.open(d / "GSE152988_RAW.tar") as tar:
+        lanes = tian21_lanes(tar, arm)
+        for m in lanes:
+            lane = m.name.rsplit("_", 1)[1].split(".")[0]
+            with h5py.File(tar.extractfile(m), "r") as h:
+                bc = dec(h["matrix/barcodes"][:])
+            sg = pd.read_csv(maps.open(f"maps/mapped_single_sgRNA_to_cell_{'CRISPRa_' if arm == 'CRISPRa' else ''}{lane}.txt"), sep="\t", header=None, index_col=0)[1]
+            outside += int((~sg.index.isin(bc)).sum())
+            guide = sg.reindex(bc).to_numpy()
+            mapped = pd.notna(guide)
+            target = np.where(mapped, pd.Series(guide).str.split("_").str[0], "")
+            is_ctrl = mapped & (target == "non-targeting")
+            parts.append(frame(len(bc), context=ctx(name, "iNeuron"), cell_type="iPSC-derived glutamatergic neuron", condition="unstimulated",
+                               timepoint="day 10", donor="WTC11", batch=lane, perturbation=np.where(mapped & ~is_ctrl, target, ""),
+                               is_control=is_ctrl, control_kind=np.where(is_ctrl, "non_targeting", None), guide=guide,
+                               n_guides=np.where(mapped, 1.0, np.nan)))
+        ids, names, ft, _ = tenx_features(tar.extractfile(lanes[0]))
+        vals = tenx_values(tar.extractfile(lanes[0]), cfg["integer_sample_values"])
+    gex = ft == "Gene Expression"
+    meta = dict(deposit=f"GEO GSE152988 {arm} lanes {', '.join(m.name.split('_')[0] for m in lanes)} (filtered_feature_bc_matrix h5 in GSE152988_RAW.tar) + "
+                "the authors' mapped_single_sgRNA_to_cell maps (kampmannlab.ucsf.edu/crop-seq maps.zip)",
+                files=[str(d / "GSE152988_RAW.tar"), str(d / "maps.zip")], batch_field="GEO sample = 10x lane (file suffix lib<n>; about 25,000 cells loaded per lane)",
+                batch_kind="technical", modality="CRISPRi (dCas9-KRAB, CROP-seq)" if arm == "CRISPRi" else "CRISPRa (DHFR-dCas9-VPH, CROP-seq)",
+                cell_calling="Cell Ranger 3.1.0 filtered barcodes (GEO); the authors instead kept raw barcodes with > 2,000 genes, > 8,000 UMI and < 15% mito",
+                guide_assignment="authors' single-sgRNA maps (sgRNA UMI > mean + 4 SD over the cell's sgRNAs, exactly one such sgRNA); "
+                                 "cells absent from the maps have no or several sgRNAs, not distinguishable (n_guides NA)",
+                matrix="10x CSC int32", gene_ids="Cell Ranger GRCh38 features (Ensembl ids + symbols)",
+                flags=[f"{outside} mapped barcodes of this arm are outside the Cell Ranger filtered set (the authors mapped raw matrices)",
+                       "no target Ensembl ids in the deposit; TMEM55A, ATP5C1 and ATP5H are old symbols the authors renamed"])
+    return Source(name, pd.concat(parts, ignore_index=True), meta, names[gex], ids[gex], vals)
+
+
+def tian21_neurons_crispri(cfg):
+    return tian21_neurons(cfg, "tian21_neurons_crispri", "CRISPRi")
+
+
+def tian21_neurons_crispra(cfg):
+    return tian21_neurons(cfg, "tian21_neurons_crispra", "CRISPRa")
 
 
 def cd4t(cfg):
@@ -654,4 +706,5 @@ def xatlas_repo(cfg):
 
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
                                    replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, replogle20,
-                                   orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb]}
+                                   orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, tian21_neurons_crispri, tian21_neurons_crispra,
+                                   cd4t, jiang, mcfaline, viperturb]}

@@ -38,6 +38,8 @@ shifrut18_t_crisprko:
   - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE119nnn/GSE119450/suppl/GSE119450_RAW.tar
 tian21_neurons:
   - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE152nnn/GSE152988/suppl/GSE152988_RAW.tar
+  - url: https://www.dropbox.com/s/xy3kffw1dbuf9t4/maps.zip?dl=1
+    name: maps.zip
 drager22_microglia:
   - url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE178nnn/GSE178317/suppl/GSE178317_RAW.tar
 papalexi21_thp1:

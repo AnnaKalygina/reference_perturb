@@ -54,11 +54,11 @@ controls:
   not_used_kinds: [unassigned, non_targeting_spike_in]
   including_unassigned: [feng]
 
-hesc_guide_min_umi: 20
+guide_call_min_umi: {hesc: 20}
 
 perturbation_direction:
   default: down
-  up: [scperturb_norman, joung23_tf_atlas]
+  up: [scperturb_norman, joung23_tf_atlas, tian21_neurons_crispra]
 
 cell_rules:
   default:
@@ -78,6 +78,8 @@ cell_rules:
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
     dld1: Yeung et al. 2026, low-MOI singlets are the reference
+    tian21_neurons_crispri: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
+    tian21_neurons_crispra: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
 
 shard:
   bucket_rows: 65536

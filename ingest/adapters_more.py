@@ -1,10 +1,11 @@
-"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng."""
+"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Tian 2021, Jiang, McFaline, VIPerturb, KOLF, Feng."""
 import glob
 import gzip
 import itertools
 import re
 import shutil
 import sys
+import tarfile
 from pathlib import Path
 
 import h5py
@@ -18,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent / "audit"))
 import sources  # noqa: E402
 from adapters import ADAPTERS, CHUNK, Adapter, chunks_of  # noqa: E402
 from config import path  # noqa: E402
-from h5 import col, dec, index  # noqa: E402
+from h5 import col, dec, index, tenx_features  # noqa: E402
 
 
 class UnitAdapter(Adapter):
@@ -175,6 +176,39 @@ class HESC(TenxLanes):
             for lo, piece in chunks_of(x):
                 yield start + lo, piece
             start += x.shape[0]
+
+
+class TianLanes(TenxLanes):
+    """Tian 2021: the Cell Ranger h5 lanes of one arm, read straight from GSE152988_RAW.tar."""
+
+    arm = None
+
+    def tar(self):
+        return tarfile.open(path(self.cfg, "raw", "tian21_neurons", "GSE152988_RAW.tar"))
+
+    def features(self, unit):
+        with self.tar() as tar:
+            ids, names, ft, _ = tenx_features(tar.extractfile(sources.tian21_lanes(tar, self.arm)[0]))
+        gex = ft == "Gene Expression"
+        return ids[gex], names[gex]
+
+    def chunks(self, unit):
+        ref = {g: i for i, g in enumerate(self.features(unit)[0])}
+        start = 0
+        with self.tar() as tar:
+            for m in sources.tian21_lanes(tar, self.arm):
+                x = self.lane_matrix(tar.extractfile(m), ref)
+                for lo, piece in chunks_of(x):
+                    yield start + lo, piece
+                start += x.shape[0]
+
+
+class TianCRISPRi(TianLanes):
+    dataset, loader, arm = "tian21_neurons_crispri", staticmethod(sources.tian21_neurons_crispri), "CRISPRi"
+
+
+class TianCRISPRa(TianLanes):
+    dataset, loader, arm = "tian21_neurons_crispra", staticmethod(sources.tian21_neurons_crispra), "CRISPRa"
 
 
 class Extract(UnitAdapter):
@@ -399,4 +433,4 @@ class Feng(GeneMajor):
                 g += len(rows)
 
 
-ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng]})
+ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, TianCRISPRi, TianCRISPRa, Jiang, McFaline, VIPerturb, Kolf, Feng]})
