@@ -1,0 +1,197 @@
+cd4t:
+  study: ZhuMarson2026
+  publication: https://doi.org/10.1016/j.cell.2026.08.002
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE314342
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+dld1:
+  study: YeungXie2026
+  publication: https://doi.org/10.64898/2026.07.10.737863
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE337988
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+feng:
+  study: FengVelten2026
+  publication: https://doi.org/10.1016/j.xgen.2025.101076
+  deposit_url: https://figshare.com/articles/dataset/A_genome-scale_single_cell_CRISPRi_map_of_trans_gene_regulation_across_many_human_pluripotent_stem_cell_lines_Count_Data_/27989294
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+hesc:
+  study: PanZhuang2026
+  publication: https://doi.org/10.64898/2026.05.16.725005
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE295214
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+jiang:
+  study: JiangSatija2025
+  publication: https://doi.org/10.1038/s41556-025-01622-z
+  deposit_url: https://zenodo.org/records/14518762
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+kolf:
+  study: NourreddineMali2026
+  publication: https://doi.org/10.1038/s41587-026-03199-w
+  deposit_url: https://plus.figshare.com/articles/dataset/_b_A_genome-scale_CRISPRi_perturbation_atlas_of_human_induced_pluripotent_stem_cells_b_/27261219
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+mcfaline:
+  study: McFalineFigueroaTrapnell2024
+  publication: https://doi.org/10.1016/j.xgen.2023.100487
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE225775
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+nadig25_hepg2:
+  study: NadigOConnor2025
+  publication: https://doi.org/10.1038/s41588-025-02169-3
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE264667
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+nadig25_jurkat:
+  study: NadigOConnor2025
+  publication: https://doi.org/10.1038/s41588-025-02169-3
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE264667
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+orion_hct116:
+  study: HuangChu2025
+  publication: https://doi.org/10.1101/2025.06.11.659105
+  deposit_url: https://huggingface.co/datasets/Xaira-Therapeutics/X-Atlas-Orion
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+orion_hek293t:
+  study: HuangChu2025
+  publication: https://doi.org/10.1101/2025.06.11.659105
+  deposit_url: https://huggingface.co/datasets/Xaira-Therapeutics/X-Atlas-Orion
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+replogle20:
+  study: ReplogleAdamson2020
+  publication: https://doi.org/10.1038/s41587-020-0470-y
+  deposit_url: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE146194
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+replogle22_gwps:
+  study: ReplogleWeissman2022
+  publication: https://doi.org/10.1016/j.cell.2022.05.013
+  deposit_url: https://plus.figshare.com/articles/dataset/_Mapping_information-rich_genotype-phenotype_landscapes_with_genome-scale_Perturb-seq_Replogle_et_al_2022_processed_Perturb-seq_datasets/20029387
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+replogle22_k562:
+  study: ReplogleWeissman2022
+  publication: https://doi.org/10.1016/j.cell.2022.05.013
+  deposit_url: https://plus.figshare.com/articles/dataset/_Mapping_information-rich_genotype-phenotype_landscapes_with_genome-scale_Perturb-seq_Replogle_et_al_2022_processed_Perturb-seq_datasets/20029387
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+replogle22_rpe1:
+  study: ReplogleWeissman2022
+  publication: https://doi.org/10.1016/j.cell.2022.05.013
+  deposit_url: https://plus.figshare.com/articles/dataset/_Mapping_information-rich_genotype-phenotype_landscapes_with_genome-scale_Perturb-seq_Replogle_et_al_2022_processed_Perturb-seq_datasets/20029387
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+scperturb_adamson:
+  study: AdamsonWeissman2016
+  publication: https://doi.org/10.1016/j.cell.2016.11.048
+  deposit_url: https://zenodo.org/records/7416068
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+scperturb_frangieh:
+  study: FrangiehIzar2021
+  publication: https://doi.org/10.1038/s41588-021-00779-1
+  deposit_url: https://zenodo.org/records/7041849
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+scperturb_norman:
+  study: NormanWeissman2019
+  publication: https://doi.org/10.1126/science.aax4438
+  deposit_url: https://zenodo.org/records/7041849
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+scperturb_sunshine:
+  study: SunshineHein2023
+  publication: https://doi.org/10.1038/s41467-023-41788-4
+  deposit_url: https://zenodo.org/records/10044268
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+scperturb_wessels:
+  study: WesselsSatija2023
+  publication: https://doi.org/10.1038/s41592-022-01705-x
+  deposit_url: https://zenodo.org/records/13350497
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+vcc2025_h1:
+  study: RoohaniBurke2025
+  publication: https://doi.org/10.1016/j.cell.2025.06.008
+  deposit_url: null
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}
+
+viperturb:
+  study: BraduSatija2026
+  publication: https://doi.org/10.1101/2026.02.12.705613
+  deposit_url: https://zenodo.org/records/18460279
+  cas_system: {value: null, source: null}
+  moi_design: {value: null, source: null}
+  harvest_time: {value: null, source: null}
+  selection_protocol: {value: null, source: null}

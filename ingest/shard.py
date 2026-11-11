@@ -200,19 +200,32 @@ def blocks(o):
                              control_kind=o.control_kind.to_numpy()[change], start=change, end=np.r_[change[1:], len(o)]))
 
 
-def manifest(context, o, dataset, adapter, drops, gate_log, uns):
+DEPOSIT_FIELDS = ["cas_system", "moi_design", "harvest_time", "selection_protocol"]
+
+
+def deposit_fields(cfg, dataset, context):
+    """(fields, sources) of a manifest that come from config/deposits.yaml, plus the pointers to the per-context tables."""
+    d = cfg["deposits"].get(dataset, {})
+    fields = dict(publication=d.get("publication"), deposit_url=d.get("deposit_url"), **{k: d.get(k, {}).get("value") for k in DEPOSIT_FIELDS},
+                  cell_counts_table=f"suffstats/{dataset}/{context}/cell_counts.parquet", pert_qc_table=f"deltas/{dataset}/{context}/pert_qc.parquet")
+    sources = dict(publication="config/deposits.yaml", deposit_url="config/deposits.yaml", **{k: d.get(k, {}).get("source") for k in DEPOSIT_FIELDS})
+    return fields, sources
+
+
+def manifest(context, o, dataset, adapter, drops, gate_log, uns, cfg):
     """Per-context manifest; every field names its source."""
     d = drops.loc[context].reset_index().to_dict("records") if context in drops.index.get_level_values(0) else []
+    fields, sources = deposit_fields(cfg, dataset, context)
     return dict(context=context, dataset=dataset, deposit=adapter.meta.get("deposit"), modality=adapter.meta.get("modality"),
                 batch_definition=adapter.meta.get("batch_field"), batch_kind=adapter.meta.get("batch_kind"),
                 control_definition=uns["control_definition"], perturbation_direction=uns["perturbation_direction"], lib_size_rule=uns["lib_size_rule"],
                 guide_assignment=adapter.meta.get("guide_assignment"), cells_kept=int(len(o)),
                 cells_per_batch={str(k): int(v) for k, v in o.groupby(o.batch.astype(str)).size().items()},
                 controls_per_batch={str(k): int(v) for k, v in o[o.control_used].groupby(o.batch.astype(str)).size().items()},
-                dropped_cells=d, gate=gate_log[gate_log.gate != "kept"].to_dict("records"), gene_mapping=uns["gene_mapping"],
+                dropped_cells=d, gate=gate_log[gate_log.gate != "kept"].to_dict("records"), gene_mapping=uns["gene_mapping"], **fields,
                 sources=dict(modality="audit loader meta (paper)", batch_definition="audit loader meta (deposit column)", control_definition="config",
                              perturbation_direction="config", lib_size_rule="config", guide_assignment="audit loader meta", dropped_cells="cell rules",
-                             gate="label gate", harvest_time=None, moi_design=None, cas_system=None, selection_protocol=None))
+                             gate="label gate", **sources))
 
 
 def run(dataset, unit, cfg):
@@ -283,7 +296,7 @@ def run(dataset, unit, cfg):
         write_h5ad(target, o, var, dict(uns, context=c), buckets.rows(start, end), len(axis), cfg)
         o.to_parquet(target.with_name(f"{c}.obs.parquet"))
         blocks(o).to_parquet(target.with_name(f"{c}.blocks.parquet"))
-        write_json(path(cfg, "manifest", f"{c}.json"), manifest(c, o, dataset, adapter, drops, gate_log, uns))
+        write_json(path(cfg, "manifest", f"{c}.json"), manifest(c, o, dataset, adapter, drops, gate_log, uns, cfg))
     path(cfg, "genes").mkdir(exist_ok=True)
     fmap.to_parquet(path(cfg, "genes", f"{dataset}.map.parquet"))
     shutil.rmtree(tmp)

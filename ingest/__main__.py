@@ -145,14 +145,23 @@ def main():
         for stage in stages:
             dependency = submit(cfg, stage, a.dataset, dependency)
     elif a.cmd == "manifest":
-        files = sorted(path(cfg, "manifest").glob("*.json"))
-        rows = [json.loads(p.read_text()) for p in files]
+        from receipts import write_json
+        from shard import deposit_fields
+        rows = []
+        for p in sorted(path(cfg, "manifest").glob("*.json")):
+            r = json.loads(p.read_text())
+            fields, sources = deposit_fields(cfg, r["dataset"], r["context"])
+            r.update(fields)
+            r["sources"].update(sources)
+            rows.append((p, r))
         if a.schema:
-            print(json.dumps(sorted({k for r in rows for k in r}), indent=1))
+            print(json.dumps(sorted({k for _, r in rows for k in r}), indent=1))
         else:
-            t = pd.DataFrame(rows)
+            for p, r in rows:
+                write_json(p, r)
+            t = pd.DataFrame([r for _, r in rows])
             t.to_parquet(path(cfg, "manifest.parquet"))
-            print(f"{len(t)} contexts written to manifest.parquet")
+            print(f"{len(t)} manifests re-rendered and written to manifest.parquet")
 
 
 if __name__ == "__main__":
