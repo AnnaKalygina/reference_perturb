@@ -115,7 +115,7 @@ def run(context, cfg):
             sto = dC[int(stored[stored.perturbation == p].delta_row.iloc[0])].astype(np.float64)
             excess.append(float(np.max(np.abs(direct - sto) - 1e-6 * np.abs(sto))))
         result["a_recompute"] = dict(n=len(pick), max_excess_over_tolerance=max(excess) if excess else None, passed=bool(max(excess) <= 1e-6) if excess else None)
-        n_med = int(np.median(stored.n)) if len(stored) else 20
+        n_med = min(int(np.median(stored.n)) if len(stored) else 20, len(ctrl.pool_rows) // 2)
         result["b_null"] = {}
         for family in (("control_mix", "perturbation_mix") if len(stored) else ("control_mix",)):
             rng = rng_for(cfg, context, f"null_{family}")
@@ -127,7 +127,7 @@ def run(context, cfg):
                     p = rng.choice(stored.perturbation.to_numpy())
                     s, e = rows_by_pert[p]
                     mix = pd.Series(batch[s:e]).value_counts(normalize=True)
-                    cells = np.concatenate([rng.choice(np.flatnonzero(ctrl.pool_batch == b), min(max(1, int(round(n_med * f))), int((ctrl.pool_batch == b).sum())), replace=False)
+                    cells = np.concatenate([rng.choice(np.flatnonzero(ctrl.pool_batch == b), min(max(1, int(round(n_med * f))), int((ctrl.pool_batch == b).sum()) // 2), replace=False)
                                             for b, f in mix.items() if (ctrl.pool_batch == b).any()])
                 rest = np.setdiff1d(np.arange(len(ctrl.pool_rows)), cells)
                 means, counts = {}, {}
