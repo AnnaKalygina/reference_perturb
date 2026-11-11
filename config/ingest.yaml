@@ -78,6 +78,7 @@ cell_rules:
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
     dld1: Yeung et al. 2026, low-MOI singlets are the reference
+    papalexi21_thp1: Papalexi et al. 2021 Nat Genet, the gRNA with most GDO counts is assigned, < 5 counts for every gRNA is negative, several high gRNAs is a doublet; negatives and doublets removed, only singlets deposited
 
 shard:
   bucket_rows: 65536

@@ -1,4 +1,4 @@
-"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng."""
+"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng, Papalexi."""
 import glob
 import gzip
 import itertools
@@ -266,6 +266,16 @@ class VIPerturb(Adapter):
                 start += m.shape[0]
 
 
+def dense_gene_blocks(fh, sep):
+    """Yield (cells, genes, counts) from a dense gene x cell text table, 256 rows at a time; the header line is already consumed."""
+    g = 0
+    while rows := [np.fromstring(line[line.index(sep) + 1:], dtype=np.int32, sep=sep) for line in itertools.islice(fh, 256)]:
+        block = np.stack(rows)
+        r, c = np.nonzero(block)
+        yield c.astype(np.int32), (r + g).astype(np.int32), block[r, c]
+        g += len(rows)
+
+
 class GeneMajor(Adapter):
     """Gene-major sources: gene blocks are scattered into cell-range buckets on disk, then yielded as cell chunks."""
 
@@ -391,12 +401,38 @@ class Feng(GeneMajor):
     def gene_blocks(self):
         with gzip.open(self.dir() / self.FILES[self._unit], "rt") as fh:
             fh.readline()
-            g = 0
-            while rows := [np.fromstring(line[line.index(",") + 1:], dtype=np.int32, sep=",") for line in itertools.islice(fh, 256)]:
-                block = np.stack(rows)
-                r, c = np.nonzero(block)
-                yield c.astype(np.int32), (r + g).astype(np.int32), block[r, c]
-                g += len(rows)
+            yield from dense_gene_blocks(fh, ",")
 
 
-ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng]})
+class Papalexi(GeneMajor):
+    """Papalexi 2021: dense cDNA counts tsv.gz (rows = genes, columns = cells) read in place from GSE153056_RAW.tar."""
+
+    dataset, loader = "papalexi21_thp1", staticmethod(sources.papalexi21_thp1)
+
+    def counts(self):
+        return sources.tar_text(path(self.cfg, "raw", "papalexi21_thp1", "GSE153056_RAW.tar"), sources.PAPALEXI_CDNA)
+
+    def obs(self, unit):
+        o = super().obs(unit)
+        with self.counts() as fh:
+            header = [c.strip('"') for c in fh.readline().rstrip("\n").split("\t")[1:]]
+        if header != list(o.barcode):
+            raise SystemExit("papalexi21_thp1: matrix columns differ from the metadata rows")
+        self._n = len(header)
+        return o
+
+    def features(self, unit):
+        with self.counts() as fh:
+            fh.readline()
+            return None, np.array([line.split("\t", 1)[0].strip('"') for line in fh], dtype=object)
+
+    def n_cells(self):
+        return self._n
+
+    def gene_blocks(self):
+        with self.counts() as fh:
+            fh.readline()
+            yield from dense_gene_blocks(fh, "\t")
+
+
+ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng, Papalexi]})

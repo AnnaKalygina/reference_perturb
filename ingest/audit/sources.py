@@ -4,6 +4,8 @@ import gzip
 import json
 import re
 import subprocess
+import tarfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import h5py
@@ -636,6 +638,50 @@ def viperturb(cfg):
     return Source("viperturb", obs, meta, None, None, vals)
 
 
+PAPALEXI_CDNA = "GSM4633614_ECCITE_cDNA_counts.tsv.gz"
+
+
+@contextmanager
+def tar_text(path, member):
+    """Text handle on a gzip member of a tar, read in place."""
+    with tarfile.open(path) as tar, gzip.open(tar.extractfile(member), "rt") as fh:
+        yield fh
+
+
+def papalexi21_thp1(cfg):
+    """Papalexi 2021 ECCITE-seq THP-1 (GSE153056): the pooled 111-guide experiment, stimulated cells only, from the authors' metadata."""
+    d = Path(cfg["root"]) / "raw/papalexi21_thp1"
+    m = pd.read_csv(d / "GSE153056_ECCITE_metadata.tsv.gz", sep="\t", index_col=0)
+    is_ctrl = (m.gene == "NT").to_numpy()
+    obs = frame(len(m), context=ctx("papalexi21_thp1", "THP1", "IFNG_DAC_TGFB1"), cell_type="THP-1", condition="IFNG_DAC_TGFB1", timepoint="72h",
+                donor="THP-1", batch=m["orig.ident"].to_numpy(), perturbation=np.where(is_ctrl, "", m.gene), is_control=is_ctrl,
+                control_kind=np.where(is_ctrl, "non_targeting", None), guide=m.guide_ID.to_numpy(), n_guides=1.0,
+                total_counts=m.nCount_RNA.to_numpy(), n_genes=m.nFeature_RNA.to_numpy(), pct_mito=m["percent.mito"].to_numpy())
+    obs["barcode"] = m.index.to_numpy()
+    obs["transduction_replicate"] = m.replicate.to_numpy()
+    genes, vals = [], []
+    with tar_text(d / "GSE153056_RAW.tar", PAPALEXI_CDNA) as fh:
+        fh.readline()
+        for line in fh:
+            name, rest = line.split("\t", 1)
+            genes.append(name.strip('"'))
+            if len(vals) < cfg["integer_sample_values"]:
+                v = np.fromstring(rest, dtype=np.float64, sep="\t")
+                vals.extend(v[v != 0])
+    meta = dict(deposit="GEO GSE153056 GSE153056_ECCITE_metadata.tsv.gz + GSM4633614_ECCITE_cDNA_counts.tsv.gz (in GSE153056_RAW.tar)",
+                files=[str(d / "GSE153056_RAW.tar"), str(d / "GSE153056_ECCITE_metadata.tsv.gz")],
+                batch_field="metadata orig.ident (10x 5' lane, 8); replicate = transduction replicate hashed into the lanes (rep1 in lanes 1-4, rep2 and rep3 in lanes 5-8)",
+                batch_kind="technical (lane) nested in transduction replicate", modality="CRISPRko (doxycycline-inducible Cas9, lentiviral CROP-seq sgRNA)",
+                cell_calling="authors (Cell Ranger 2.1.1 hg19, > 10% mito and < 100 genes removed, HTO doublets and negatives removed, replicate 4 removed)",
+                guide_assignment="authors' guide_ID: gRNA with the most GDO counts; < 5 counts for every gRNA = negative, several high gRNAs = doublet; only singlets deposited",
+                matrix="dense genes x cells tsv.gz, integer; column sums equal nCount_RNA", gene_ids="symbols only (hg19 Cell Ranger reference)",
+                flags=["only the 90% stimulated (DAC + TGFB1 + IFNG) cells are deposited; the 10% unstimulated cells are not",
+                       "MULTI_ID / HTO_classification name the replicates rep1/rep3/rep4 and rep1/rep3/rep2; the replicate column (rep1-3) is used",
+                       "PDL1g1-3 and eGFPg1 are in the GDO feature list but assigned to no cell",
+                       "the arrayed ECCITE experiment (GSM4633608-13) and the CITE-seq experiment are not ingested"])
+    return Source("papalexi21_thp1", obs, meta, np.array(genes, dtype=object), None, np.array(vals[: cfg["integer_sample_values"]]))
+
+
 def xatlas_repo(cfg):
     """Repo xatlas_orion_processed.h5ad (log-normalized; for version comparison only)."""
     p = Path(cfg["repo_data"]) / "xatlas_orion/xatlas_orion_processed.h5ad"
@@ -654,4 +700,5 @@ def xatlas_repo(cfg):
 
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
                                    replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, replogle20,
-                                   orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb]}
+                                   orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb,
+                                   papalexi21_thp1]}
