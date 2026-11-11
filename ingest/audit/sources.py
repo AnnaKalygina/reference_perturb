@@ -93,6 +93,43 @@ def scperturb_adamson(cfg):
     return Source("adamson16", obs, meta, genes, ens, vals)
 
 
+ADAMSON_RUNS = {"GSM2406675_10X001": (1, "day 8", {"1": ("adamson16__K562__pilot", "unstimulated")}),
+                "GSM2406677_10X005": (3, "day 5", {"1": ("adamson16__K562__epistasis__tunicamycin_6h", "tunicamycin_6h"),
+                                                   "2": ("adamson16__K562__epistasis__thapsigargin_4h", "thapsigargin_4h"),
+                                                   "3": ("adamson16__K562__epistasis__DMSO_6h", "DMSO_6h")})}
+
+
+def adamson16_other_lanes(cfg):
+    """GEO GSE90546_RAW.tar: the pilot (10X001, one-guide vectors) and UPR epistasis (10X005, three-guide vectors, one GEM group per drug) experiments."""
+    tar = Path(cfg["root"]) / "raw/adamson16_other_lanes/GSE90546_RAW.tar"
+    parts = []
+    for run, (guides_per_vector, day, contexts) in ADAMSON_RUNS.items():
+        bc = tar_table(tar, f"{run}_barcodes.tsv.gz", sep="\t", header=None)[0]
+        ci = tar_table(tar, f"{run}_cell_identities.csv.gz").set_index("cell BC").reindex(bc)
+        ident = ci["guide identity"].fillna("*")
+        one = ((ci["number of cells"] == 1) & ci["good coverage"].eq(True) & (ident != "*")).to_numpy()
+        is_ctrl = one & (ident.str.contains("(", regex=False) | ident.str.startswith("3x_neg_ctrl")).to_numpy()
+        targets = [join_targets(t for t in g.rsplit("_", 1)[0].split("_") if t != "only") for g in ident]
+        gem = bc.str.split("-").str[1]
+        parts.append(frame(len(bc), context=gem.map(lambda g: contexts[g][0]).to_numpy(), cell_type="K562", condition=gem.map(lambda g: contexts[g][1]).to_numpy(),
+                           timepoint=day, donor="K562", batch=gem.to_numpy(), perturbation=np.where(one & ~is_ctrl, targets, ""), is_control=is_ctrl,
+                           control_kind=np.where(is_ctrl, "non_targeting", None), guide=ci["guide identity"].to_numpy(),
+                           n_guides=ci["number of cells"].fillna(0).to_numpy() * guides_per_vector))
+        parts[-1]["guide_umi"], parts[-1]["barcode"], parts[-1]["gsm"] = ci["UMI count"].to_numpy(), bc.to_numpy(), run
+    obs = pd.concat(parts, ignore_index=True)
+    g = tar_table(tar, "GSM2406677_10X005_genes.tsv.gz", sep="\t", header=None, names=["id", "name"])
+    meta = dict(deposit="GEO GSE90546_RAW.tar: GSM2406675 (10X001) and GSM2406677 (10X005) matrix.mtx.txt + barcodes + genes + cell_identities.csv",
+                files=[str(tar)], batch_field="barcode suffix = GEM group (10X001 one; 10X005 three, one per drug treatment, so one batch per context)",
+                batch_kind="technical", modality="CRISPRi (dCas9-KRAB; 10X005 three-guide vectors)", cell_calling="authors (Cell Ranger 1.0/1.1 barcodes)",
+                guide_assignment="authors' cell_identities: good coverage and number of cells == 1 assigned, >= 2 multiple, 0 or '*' unidentifiable",
+                matrix="matrix.mtx.txt.gz (10X001 integer, 10X005 real-typed, integer-valued)",
+                gene_ids="genes.tsv Ensembl ids + symbols (10X001 35,635 features, Cell Ranger 1.0; 10X005 32,738 as 10X010)",
+                flags=["GSM2406681 (10X010) in the same tar is the reference's scperturb_adamson context",
+                       "22 10X005 identity rows name guides of other vectors (PSMD12_pDS009 etc.), none with good coverage, so all are unidentifiable",
+                       "44 10X005 identity rows have no matrix barcode", "the 10X001 matrix has no counts on its 13 MT- features (pct_mito 0 for every cell)"])
+    return Source("adamson16_other_lanes", obs, meta, g.name.to_numpy(), g.id.to_numpy(), mtx_values(tar, "GSM2406677_10X005_matrix.mtx.txt.gz", cfg["integer_sample_values"]))
+
+
 FRANGIEH_CTRL = ("NO_SITE", "ONE_NON-GENE_SITE")
 
 
@@ -734,6 +771,6 @@ def xatlas_repo(cfg):
     return Source("xatlas_orion_repo", obs, meta, None, None, vals)
 
 
-SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
+SOURCES = {f.__name__: f for f in [scperturb_adamson, adamson16_other_lanes, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
                                    wessels23_hek293ft, wessels23_perturbseq, replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat,
                                    replogle20, orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb]}

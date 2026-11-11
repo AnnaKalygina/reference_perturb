@@ -1,4 +1,4 @@
-"""Adapters for GEO tar deposits read in place: the Wessels 2023 HEK293FT arms (matrix.mtx members)."""
+"""Adapters for GEO tar deposits read in place: the Wessels 2023 HEK293FT arms and the Adamson 2016 pilot and epistasis lanes (matrix.mtx members)."""
 import gzip
 import sys
 import tarfile
@@ -14,7 +14,7 @@ import sources  # noqa: E402
 from adapters import ADAPTERS, chunks_of  # noqa: E402
 from adapters_more import UnitAdapter  # noqa: E402
 from config import path  # noqa: E402
-from sources import WESSELS_TARS, tar_table  # noqa: E402
+from sources import ADAMSON_RUNS, WESSELS_TARS, tar_table  # noqa: E402
 
 
 def mtx_cells(tar, member, rows, cols):
@@ -127,4 +127,27 @@ class WesselsPerturbSeq(TarUnits):
         yield from chunks_of(mtx_cells(self.tar(), "Perturb-seq.GEXGDO.matrix.mtx.gz", self.gene_rows()[0], cols))
 
 
-ADAPTERS.update({a.dataset: a for a in [WesselsHEK293FT, WesselsPerturbSeq]})
+class AdamsonOtherLanes(TarUnits):
+    """GSE90546_RAW.tar: one unit per GEO sample over every barcode of its matrix.mtx member."""
+
+    dataset, loader = "adamson16_other_lanes", staticmethod(sources.adamson16_other_lanes)
+
+    def units(self):
+        return list(ADAMSON_RUNS)
+
+    def select(self, obs, unit):
+        return (obs.gsm == unit).to_numpy()
+
+    def tar(self):
+        return path(self.cfg, "raw", "adamson16_other_lanes", "GSE90546_RAW.tar")
+
+    def features(self, unit):
+        g = tar_table(self.tar(), f"{unit}_genes.tsv.gz", sep="\t", header=None, names=["id", "name"])
+        return g.id.to_numpy(), g.name.to_numpy()
+
+    def chunks(self, unit):
+        cols = columns(tar_table(self.tar(), f"{unit}_barcodes.tsv.gz", sep="\t", header=None)[0], self._obs.barcode, f"{self.dataset} {unit}")
+        yield from chunks_of(mtx_cells(self.tar(), f"{unit}_matrix.mtx.txt.gz", np.arange(len(self.features(unit)[0])), cols))
+
+
+ADAPTERS.update({a.dataset: a for a in [WesselsHEK293FT, WesselsPerturbSeq, AdamsonOtherLanes]})

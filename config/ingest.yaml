@@ -64,7 +64,7 @@ cell_rules:
   default:
     keep: exactly_one_assigned_construct
     drop: [no_guide, multi_guide]
-  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20, wessels23_hek293ft, wessels23_perturbseq]
+  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20, wessels23_hek293ft, wessels23_perturbseq, adamson16_other_lanes]
   high_moi_combinations_kept: [scperturb_sunshine]
   feng:
     keep: [exactly_one_guide, unassigned_as_controls]
@@ -80,6 +80,7 @@ cell_rules:
     dld1: Yeung et al. 2026, low-MOI singlets are the reference
     wessels23_hek293ft: Wessels et al. 2023 Nat Methods, cells without a bcgRNA and cells with multiple bcgRNA assignments removed (CaRPool-seq MultiSeqDemux; stabRNA g1/g2 UMI rule); only assigned cells deposited
     wessels23_perturbseq: Wessels et al. 2023 Nat Methods, HTODemux doublets removed and only cells with the sgRNA number and combination of their pool retained; only those cells deposited
+    adamson16_other_lanes: Adamson et al. 2016 Cell, one good-coverage guide barcode identity assigned, two or more a multiple, none unidentifiable
 
 shard:
   bucket_rows: 65536
