@@ -682,6 +682,41 @@ def papalexi21_thp1(cfg):
     return Source("papalexi21_thp1", obs, meta, np.array(genes, dtype=object), None, np.array(vals[: cfg["integer_sample_values"]]))
 
 
+HSPC_CONTROLS = {"NT": "non_targeting", "AAVS1": "safe_targeting"}
+
+
+def martinrufino25_hspc(cfg):
+    """Martin-Rufino 2025 Perturb-multiome HSPC (GSE274113): authors' annotated metadata, counts from the per-replicate CROPseq h5."""
+    d = Path(cfg["root"]) / "raw/hspc25_multiome"
+    m = pd.read_csv(d / "GSE274113_annotated_metadata.csv.gz", dtype=str, keep_default_na=False)
+    m = m[m.iloc[:, 0] != ""].reset_index(drop=True)
+    is_ctrl = (m.target == "NT").to_numpy()
+    kind = m.perturbation_name.str.rsplit("_", n=1).str[0].map(HSPC_CONTROLS)
+    obs = frame(len(m), context=("martinrufino25_hspc__HSPC__" + m.Timepoint.str.replace(" ", "", regex=False)).to_numpy(),
+                cell_type="primary HSPC (erythroid differentiation)", condition="erythroid differentiation", timepoint=m.Timepoint.to_numpy(),
+                donor="CD34+ HSPC donor", batch=m.replicate.to_numpy(), perturbation=np.where(is_ctrl, "", m.target), is_control=is_ctrl,
+                control_kind=np.where(is_ctrl, kind, None), guide=m.perturbation_name.to_numpy(), n_guides=1.0,
+                total_counts=pd.to_numeric(m.nCount_RNA).to_numpy(), n_genes=pd.to_numeric(m.nFeature_RNA).to_numpy())
+    obs["barcode"] = m.iloc[:, 0].str.split("_").str[1].to_numpy()
+    obs["author_cell_type"] = m.new_CellType.to_numpy()
+    first = sorted(d.glob("GSE274113_filtered_feature_bc_matrix_*.h5"))[0]
+    ids, names, ft, _ = tenx_features(first)
+    gex = ft == "Gene Expression"
+    meta = dict(deposit="GEO GSE274113 GSE274113_annotated_metadata.csv.gz + GSE274113_filtered_feature_bc_matrix_<k>.h5 (Cellranger v7 GEX + CRISPR Guide Capture, one per replicate)",
+                files=[str(d)], batch_field="metadata replicate (rep<k>) = one 10x Multiome channel; 4 technical replicates per time point on one chip",
+                batch_kind="technical", modality="CRISPRko (Cas9 RNP electroporation, lentiviral CROP-seq sgRNA)",
+                cell_calling="authors (Cellranger ARC barcodes with a detected sgRNA: 137,604 cells)",
+                guide_assignment="authors' perturbation_name: one sgRNA per cell, equal to the CRISPR Guide Capture feature with the most UMIs in every replicate; cells without a detected sgRNA are not deposited",
+                matrix="10x h5 CSC integer; GEX counts identical to the rep<k> Multiome (ATAC + GEX) h5 for every annotated cell",
+                gene_ids="Cellranger GRCh38 features (Ensembl ids + symbols)",
+                flags=["controls: NT_1-3 non-targeting and AAVS1_1-3 safe-targeting, both labelled target NT by the authors",
+                       "rep11 and rep15 are not on GEO; the Multiome h5 of rep9 is on GEO but not on disk, its CROPseq h5 is",
+                       "the metadata csv has an empty row after every cell row",
+                       "cells of one context span many differentiation states (author_cell_type); the authors compare each cell with nearest-neighbour controls",
+                       "Peaks and CRISPR Guide Capture features skipped"])
+    return Source("martinrufino25_hspc", obs, meta, names[gex], ids[gex], tenx_values(first, cfg["integer_sample_values"]))
+
+
 def xatlas_repo(cfg):
     """Repo xatlas_orion_processed.h5ad (log-normalized; for version comparison only)."""
     p = Path(cfg["repo_data"]) / "xatlas_orion/xatlas_orion_processed.h5ad"
@@ -701,4 +736,4 @@ def xatlas_repo(cfg):
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
                                    replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, replogle20,
                                    orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb,
-                                   papalexi21_thp1]}
+                                   papalexi21_thp1, martinrufino25_hspc]}

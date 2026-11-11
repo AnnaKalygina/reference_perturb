@@ -1,4 +1,4 @@
-"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng, Papalexi."""
+"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng, Papalexi, Martin-Rufino HSPC."""
 import glob
 import gzip
 import itertools
@@ -154,18 +154,18 @@ class TenxLanes(Adapter):
         x.data = x.data.astype(np.int32)
         return x
 
+    def features(self, unit):
+        with h5py.File(self.files()[0], "r") as h:
+            m = h["matrix"]
+            gex = dec(m["features/feature_type"][:]) == "Gene Expression"
+            return dec(m["features/id"][:])[gex], dec(m["features/name"][:])[gex]
+
 
 class HESC(TenxLanes):
     dataset, loader = "hesc", staticmethod(sources.hesc)
 
     def files(self):
         return sorted(glob.glob(str(Path(self.cfg["paths"]["vcc_data"]) / "raw/gse295214/GSM*_filtered_feature_bc_matrix.h5")))
-
-    def features(self, unit):
-        with h5py.File(self.files()[0], "r") as h:
-            m = h["matrix"]
-            gex = dec(m["features/feature_type"][:]) == "Gene Expression"
-            return dec(m["features/id"][:])[gex], dec(m["features/name"][:])[gex]
 
     def chunks(self, unit):
         ref = {g: i for i, g in enumerate(self.features(unit)[0])}
@@ -435,4 +435,41 @@ class Papalexi(GeneMajor):
             yield from dense_gene_blocks(fh, "\t")
 
 
-ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng, Papalexi]})
+class MartinRufinoHSPC(TenxLanes):
+    """Martin-Rufino 2025 HSPC: one Cellranger v7 h5 per replicate; the annotated cells of each replicate are a contiguous block of the metadata."""
+
+    dataset, loader = "martinrufino25_hspc", staticmethod(sources.martinrufino25_hspc)
+
+    def files(self):
+        fs = glob.glob(str(path(self.cfg, "raw", "hspc25_multiome", "GSE274113_filtered_feature_bc_matrix_*.h5")))
+        return sorted(fs, key=lambda s: int(re.search(r"_(\d+)\.h5$", s).group(1)))
+
+    def obs(self, unit):
+        o = super().obs(unit)
+        self.rows, start = [], 0
+        for fp in self.files():
+            rep = "rep" + re.search(r"_(\d+)\.h5$", fp).group(1)
+            sel = np.flatnonzero((o.batch == rep).to_numpy())
+            if not np.array_equal(sel, np.arange(start, start + len(sel))):
+                raise SystemExit(f"{self.dataset}: {rep} cells are not a contiguous block of the metadata")
+            with h5py.File(fp, "r") as h:
+                pos = pd.Index(dec(h["matrix/barcodes"][:])).get_indexer(o.barcode.to_numpy()[sel])
+            if (pos < 0).any():
+                raise SystemExit(f"{self.dataset}: {int((pos < 0).sum())} annotated {rep} cells are absent from {fp}")
+            self.rows.append(pos)
+            start += len(sel)
+        if start != len(o):
+            raise SystemExit(f"{self.dataset}: {len(o) - start} annotated cells have no lane file")
+        return o
+
+    def chunks(self, unit):
+        ref = {g: i for i, g in enumerate(self.features(unit)[0])}
+        start = 0
+        for fp, rows in zip(self.files(), self.rows):
+            x = self.lane_matrix(fp, ref)[rows]
+            for lo, piece in chunks_of(x):
+                yield start + lo, piece
+            start += x.shape[0]
+
+
+ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng, Papalexi, MartinRufinoHSPC]})
