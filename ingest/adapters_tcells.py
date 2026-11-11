@@ -1,0 +1,70 @@
+"""Primary T cell Perturb-seq deposits (Schmidt 2022, Shifrut 2018): MatrixMarket matrices streamed in cell chunks."""
+import gzip
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+
+sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / "audit"))
+import sources  # noqa: E402
+from adapters import ADAPTERS, CHUNK, Adapter  # noqa: E402
+from config import path  # noqa: E402
+
+
+def mtx_header(fh):
+    """(n_features, n_cells) of a MatrixMarket stream, leaving it positioned at the first entry."""
+    line = fh.readline()
+    while line.startswith(b"%"):
+        line = fh.readline()
+    return tuple(int(v) for v in line.split()[:2])
+
+
+def cells_csr(t, first, n, n_features):
+    """CSR of the entries of cells first..first+n-1 (0-based) over the features; fails when the entries are not sorted by cell."""
+    rows = t.cell.to_numpy() - 1 - first
+    if len(rows) and ((np.diff(rows) < 0).any() or rows[0] < 0 or rows[-1] >= n):
+        raise SystemExit("matrix.mtx entries are not sorted by cell")
+    return sp.csr_matrix((t["count"].to_numpy(), (rows, t.feature.to_numpy() - 1)), shape=(n, n_features))
+
+
+def mtx_cell_chunks(fh, n_features, n_cells):
+    """Yield (first cell, CSR cells x features) over CHUNK cells from a cell-sorted MatrixMarket body of integer entries."""
+    pending, first = [], 0
+    for part in pd.read_csv(fh, sep=" ", header=None, names=["feature", "cell", "count"], dtype=np.int32, chunksize=20000000):
+        pending.append(part)
+        while int(part.cell.iloc[-1]) > first + CHUNK:
+            t = pd.concat(pending, ignore_index=True)
+            cut = int(np.searchsorted(t.cell.to_numpy(), first + CHUNK, side="right"))
+            yield first, cells_csr(t.iloc[:cut], first, CHUNK, n_features)
+            pending, first = [t.iloc[cut:]], first + CHUNK
+    yield first, cells_csr(pd.concat(pending, ignore_index=True), first, n_cells - first, n_features)
+
+
+class Schmidt22(Adapter):
+    """GEO GSE190604 cellranger aggr matrix.mtx.gz, gene-expression features only."""
+
+    dataset, loader = "schmidt22_t_crispra", staticmethod(sources.schmidt22_t_crispra)
+
+    def dir(self):
+        return path(self.cfg, "raw", "schmidt22_t_crispra")
+
+    def feature_table(self):
+        return pd.read_csv(self.dir() / "GSE190604_features.tsv.gz", sep="\t", header=None, names=["id", "name", "type"])
+
+    def features(self, unit):
+        f = self.feature_table()
+        gex = f[f.type == "Gene Expression"]
+        return gex.id.to_numpy(), gex.name.to_numpy()
+
+    def chunks(self, unit):
+        gex = (self.feature_table().type == "Gene Expression").to_numpy()
+        with gzip.open(self.dir() / "GSE190604_matrix.mtx.gz", "rb") as fh:
+            n_features, n_cells = mtx_header(fh)
+            for start, m in mtx_cell_chunks(fh, n_features, n_cells):
+                yield start, m[:, gex]
+
+
+ADAPTERS.update({a.dataset: a for a in [Schmidt22]})

@@ -58,7 +58,7 @@ hesc_guide_min_umi: 20
 
 perturbation_direction:
   default: down
-  up: [scperturb_norman, joung23_tf_atlas]
+  up: [scperturb_norman, joung23_tf_atlas, schmidt22_t_crispra]
 
 cell_rules:
   default:
@@ -78,6 +78,7 @@ cell_rules:
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
     dld1: Yeung et al. 2026, low-MOI singlets are the reference
+    schmidt22_t_crispra: Schmidt et al. 2022 Science, droplets with >1 sgRNA called filtered out and only droplets with >= 5 sgRNA UMIs used
 
 shard:
   bucket_rows: 65536
