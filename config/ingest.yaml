@@ -98,8 +98,10 @@ slurm:
   caps: {shard: 4, shard_large: 3, moments: 12, deltas: 12, validate: 24}
   time: {default: "24:00:00", shard_large: "7-00:00:00"}
   memory_gb:
-    default: 24
-    shard: {cd4t: 48, orion_hct116: 32, orion_hek293t: 32, kolf: 16, feng: 32, replogle22_gwps: 24, hesc: 24, viperturb: 48}
-    moments: {orion_hct116: 64, orion_hek293t: 64, cd4t: 48, kolf: 48, replogle22_gwps: 32}
+    shard: {default: 16, cd4t: 32, feng: 32, jiang: 24, kolf: 24, orion_hct116: 32, orion_hek293t: 32, scperturb_frangieh: 24, scperturb_wessels: 8, vcc2025_h1: 32, viperturb: 32}
+    moments: {default: 8, cd4t: 16, kolf: 16, mcfaline: 16, nadig25_hepg2: 16, nadig25_jurkat: 16, orion_hct116: 24, orion_hek293t: 32, replogle22_gwps: 16, replogle22_k562: 16, replogle22_rpe1: 16, scperturb_sunshine: 16}
+    deltas: {default: 8}
+    validate: {default: 8, feng: 16, hesc: 16, kolf: 16, orion_hct116: 16, orion_hek293t: 16, scperturb_adamson: 16}
+    scores: {default: 8, cd4t: 48, dld1: 16, hesc: 16, jiang: 32, kolf: 24, mcfaline: 16, orion_hct116: 32, orion_hek293t: 32, replogle22_gwps: 16, scperturb_adamson: 24, scperturb_frangieh: 24, scperturb_sunshine: 16, vcc2025_h1: 16, viperturb: 16}
   large_shards: [orion_hct116, orion_hek293t, kolf, cd4t]
   rerun_memory_factor: 1.3

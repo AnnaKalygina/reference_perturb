@@ -6,10 +6,13 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from config import load, path  # noqa: E402
+from receipts import write_json  # noqa: E402
 
 STAGES = ["shard", "moments", "deltas", "validate", "scores"]
 UPSTREAM = {"moments": "shard", "deltas": "moments", "validate": "deltas", "scores": "shard"}
@@ -82,17 +85,57 @@ def status(cfg):
     return t
 
 
-def memory_gb(cfg, stage, dataset):
-    """Per-worker memory: config default per (stage, dataset), raised to 1.3 x the largest observed peak of the same (stage, dataset)."""
-    m = cfg["slurm"]["memory_gb"]
-    base = m.get(stage, {}).get(dataset, m["default"]) if isinstance(m.get(stage), dict) else m["default"]
-    peaks = [json.loads(p.read_text()).get("peak_rss_gb", 0) for p in path(cfg, "receipts", "outputs", stage).glob(f"{dataset}*.json")] if path(cfg, "receipts", "outputs", stage).exists() else []
-    return int(max(base, cfg["slurm"]["rerun_memory_factor"] * max(peaks, default=0) + 1))
+def peak_rss(cfg):
+    """(stage, dataset) -> largest peak_rss_gb over the output receipts; the dataset of a context is its shard directory."""
+    dataset_of = {context: dataset for dataset, context in contexts_of(cfg)}
+    peaks = {}
+    for stage in STAGES:
+        for p in path(cfg, "receipts", "outputs", stage).glob("*.json"):
+            rec = json.loads(p.read_text())
+            key = (stage, Path(rec["outputs"][0]).parent.name if stage == "shard" else dataset_of.get(rec["unit"]))
+            peaks[key] = max(peaks.get(key, 0), rec.get("peak_rss_gb", 0))
+    return peaks
+
+
+def memory_gb(cfg, stage, dataset, peak):
+    """Per-worker memory: the config entry of (stage, dataset) or the stage default, raised to rerun_memory_factor x the observed peak."""
+    m = cfg["slurm"]["memory_gb"][stage]
+    return int(max(m.get(dataset, m["default"]), cfg["slurm"]["rerun_memory_factor"] * peak + 1))
+
+
+def memory_table(cfg):
+    """Observed peaks per stage and dataset, and the proposed slurm.memory_gb: rerun_memory_factor x the peak, rounded up to a multiple of 8 GB."""
+    peaks = pd.Series(peak_rss(cfg)).unstack(0)[STAGES].sort_index()
+    proposed = np.ceil(peaks * cfg["slurm"]["rerun_memory_factor"] / 8) * 8
+    table = {}
+    for stage in STAGES:
+        default = int(proposed[stage].mode().iloc[0])
+        table[stage] = dict(default=default, **{d: int(v) for d, v in proposed[stage].dropna().items() if v != default})
+    return peaks, table
+
+
+def rehash(cfg, old):
+    """Rewrite every output receipt carrying the old config hash to the current one, keeping the history; returns the count."""
+    if cfg["dirty"]:
+        raise SystemExit("rehash needs a clean checkout")
+    if old == cfg["hash"]:
+        raise SystemExit(f"{old} is the current hash")
+    n = 0
+    for p in path(cfg, "receipts", "outputs").glob("*/*.json"):
+        rec = json.loads(p.read_text())
+        if rec["config_hash"] != old:
+            continue
+        rec["config_hash"] = cfg["hash"]
+        rec.setdefault("config_hash_history", []).append({"from": old, "to": cfg["hash"], "commit": cfg["commit"], "date": time.strftime("%Y-%m-%d")})
+        write_json(p, rec)
+        n += 1
+    return n
 
 
 def submit(cfg, stage, datasets, dependency=None):
     """Submit the missing units of a stage; returns {unit: job id}."""
     jobs = running(cfg)
+    peaks = peak_rss(cfg)
     submitted = {}
     units = []
     if stage == "shard":
@@ -113,7 +156,7 @@ def submit(cfg, stage, datasets, dependency=None):
         large = stage == "shard" and dataset in cfg["slurm"]["large_shards"]
         t = cfg["slurm"]["time"]["shard_large" if large else "default"]
         workers = WORKERS.get(stage, 1)
-        cmd = ["sbatch", "--parsable", f"--job-name={name}", f"--mem={memory_gb(cfg, stage, dataset) * workers}G", f"--cpus-per-task={max(2, workers)}", f"--time={t}", f"--partition={cfg['slurm']['partition']}"]
+        cmd = ["sbatch", "--parsable", f"--job-name={name}", f"--mem={memory_gb(cfg, stage, dataset, peaks.get((stage, dataset), 0)) * workers}G", f"--cpus-per-task={max(2, workers)}", f"--time={t}", f"--partition={cfg['slurm']['partition']}"]
         dep = dependency.get(unit) if dependency else None
         if dep:
             cmd.append(f"--dependency=afterok:{dep}")
@@ -133,6 +176,9 @@ def main():
     s.add_argument("--dataset", nargs="*")
     m = sub.add_parser("manifest")
     m.add_argument("--schema", action="store_true")
+    sub.add_parser("memory")
+    r = sub.add_parser("rehash")
+    r.add_argument("--from", dest="old", required=True)
     a = ap.parse_args()
     cfg = load()
     if a.cmd == "status":
@@ -144,6 +190,12 @@ def main():
         dependency = None
         for stage in stages:
             dependency = submit(cfg, stage, a.dataset, dependency)
+    elif a.cmd == "memory":
+        peaks, table = memory_table(cfg)
+        print("observed peak_rss_gb, max over units", peaks.to_string(float_format="{:.2f}".format), sep="\n")
+        print(yaml.safe_dump(dict(slurm=dict(memory_gb=table)), default_flow_style=None, sort_keys=False, width=1000), end="")
+    elif a.cmd == "rehash":
+        print(f"{rehash(cfg, a.old)} receipts rehashed from {a.old} to {cfg['hash']}")
     elif a.cmd == "manifest":
         files = sorted(path(cfg, "manifest").glob("*.json"))
         rows = [json.loads(p.read_text()) for p in files]
