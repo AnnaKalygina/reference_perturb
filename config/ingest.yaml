@@ -64,7 +64,7 @@ cell_rules:
   default:
     keep: exactly_one_assigned_construct
     drop: [no_guide, multi_guide]
-  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20]
+  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20, wessels23_hek293ft, wessels23_perturbseq, adamson16_other_lanes]
   high_moi_combinations_kept: [scperturb_sunshine]
   feng:
     keep: [exactly_one_guide, unassigned_as_controls]
@@ -85,6 +85,9 @@ cell_rules:
     tian21_neurons_crispra: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
     papalexi21_thp1: Papalexi et al. 2021 Nat Genet, the gRNA with most GDO counts is assigned, < 5 counts for every gRNA is negative, several high gRNAs is a doublet; negatives and doublets removed, only singlets deposited
     martinrufino25_hspc: Martin-Rufino et al. 2025 Science (bioRxiv methods), one sgRNA per cell from the CROP-seq enrichment library; cells without a detected sgRNA (8.9%) are not deposited, no multi-guide class
+    wessels23_hek293ft: Wessels et al. 2023 Nat Methods, cells without a bcgRNA and cells with multiple bcgRNA assignments removed (CaRPool-seq MultiSeqDemux; stabRNA g1/g2 UMI rule); only assigned cells deposited
+    wessels23_perturbseq: Wessels et al. 2023 Nat Methods, HTODemux doublets removed and only cells with the sgRNA number and combination of their pool retained; only those cells deposited
+    adamson16_other_lanes: Adamson et al. 2016 Cell, one good-coverage guide barcode identity assigned, two or more a multiple, none unidentifiable
 
 shard:
   bucket_rows: 65536

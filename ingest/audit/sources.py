@@ -2,6 +2,7 @@
 import glob
 import gzip
 import io
+import itertools
 import json
 import re
 import subprocess
@@ -56,6 +57,19 @@ class Source:
         self.name, self.obs, self.meta, self.genes, self.ensembl, self.values = name, obs, meta, genes, ensembl, values
 
 
+def tar_table(tar, member, **kw):
+    """A gzipped csv/tsv member of a tar archive as a DataFrame."""
+    with tarfile.open(tar) as t:
+        return pd.read_csv(t.extractfile(member), compression="gzip", **kw)
+
+
+def mtx_values(tar, member, n):
+    """The first n stored values of a gzipped matrix.mtx member."""
+    with tarfile.open(tar) as t, gzip.open(t.extractfile(member), "rt") as fh:
+        body = (line for line in fh if not line.startswith("%"))
+        return np.array([line.split()[2] for line in itertools.islice(body, 1, n + 1)], float)
+
+
 def scperturb_adamson(cfg):
     """scPerturb AdamsonWeissman2016 GSM2406681 (10X010), identical file in repo and VCC2026."""
     p = Path(cfg["vcc_data"]) / "raw/scperturb/AdamsonWeissman2016_GSM2406681_10X010.h5ad"
@@ -80,6 +94,43 @@ def scperturb_adamson(cfg):
                 matrix="X csc float32 integer-valued", gene_ids="symbols + ensembl_id (Ensembl release not stated)",
                 flags=["only GSM2406681 of the Adamson study; other experiments (GSM2406675/77) not in scPerturb file"])
     return Source("adamson16", obs, meta, genes, ens, vals)
+
+
+ADAMSON_RUNS = {"GSM2406675_10X001": (1, "day 8", {"1": ("adamson16__K562__pilot", "unstimulated")}),
+                "GSM2406677_10X005": (3, "day 5", {"1": ("adamson16__K562__epistasis__tunicamycin_6h", "tunicamycin_6h"),
+                                                   "2": ("adamson16__K562__epistasis__thapsigargin_4h", "thapsigargin_4h"),
+                                                   "3": ("adamson16__K562__epistasis__DMSO_6h", "DMSO_6h")})}
+
+
+def adamson16_other_lanes(cfg):
+    """GEO GSE90546_RAW.tar: the pilot (10X001, one-guide vectors) and UPR epistasis (10X005, three-guide vectors, one GEM group per drug) experiments."""
+    tar = Path(cfg["root"]) / "raw/adamson16_other_lanes/GSE90546_RAW.tar"
+    parts = []
+    for run, (guides_per_vector, day, contexts) in ADAMSON_RUNS.items():
+        bc = tar_table(tar, f"{run}_barcodes.tsv.gz", sep="\t", header=None)[0]
+        ci = tar_table(tar, f"{run}_cell_identities.csv.gz").set_index("cell BC").reindex(bc)
+        ident = ci["guide identity"].fillna("*")
+        one = ((ci["number of cells"] == 1) & ci["good coverage"].eq(True) & (ident != "*")).to_numpy()
+        is_ctrl = one & (ident.str.contains("(", regex=False) | ident.str.startswith("3x_neg_ctrl")).to_numpy()
+        targets = [join_targets(t for t in g.rsplit("_", 1)[0].split("_") if t != "only") for g in ident]
+        gem = bc.str.split("-").str[1]
+        parts.append(frame(len(bc), context=gem.map(lambda g: contexts[g][0]).to_numpy(), cell_type="K562", condition=gem.map(lambda g: contexts[g][1]).to_numpy(),
+                           timepoint=day, donor="K562", batch=gem.to_numpy(), perturbation=np.where(one & ~is_ctrl, targets, ""), is_control=is_ctrl,
+                           control_kind=np.where(is_ctrl, "non_targeting", None), guide=ci["guide identity"].to_numpy(),
+                           n_guides=ci["number of cells"].fillna(0).to_numpy() * guides_per_vector))
+        parts[-1]["guide_umi"], parts[-1]["barcode"], parts[-1]["gsm"] = ci["UMI count"].to_numpy(), bc.to_numpy(), run
+    obs = pd.concat(parts, ignore_index=True)
+    g = tar_table(tar, "GSM2406677_10X005_genes.tsv.gz", sep="\t", header=None, names=["id", "name"])
+    meta = dict(deposit="GEO GSE90546_RAW.tar: GSM2406675 (10X001) and GSM2406677 (10X005) matrix.mtx.txt + barcodes + genes + cell_identities.csv",
+                files=[str(tar)], batch_field="barcode suffix = GEM group (10X001 one; 10X005 three, one per drug treatment, so one batch per context)",
+                batch_kind="technical", modality="CRISPRi (dCas9-KRAB; 10X005 three-guide vectors)", cell_calling="authors (Cell Ranger 1.0/1.1 barcodes)",
+                guide_assignment="authors' cell_identities: good coverage and number of cells == 1 assigned, >= 2 multiple, 0 or '*' unidentifiable",
+                matrix="matrix.mtx.txt.gz (10X001 integer, 10X005 real-typed, integer-valued)",
+                gene_ids="genes.tsv Ensembl ids + symbols (10X001 35,635 features, Cell Ranger 1.0; 10X005 32,738 as 10X010)",
+                flags=["GSM2406681 (10X010) in the same tar is the reference's scperturb_adamson context",
+                       "22 10X005 identity rows name guides of other vectors (PSMD12_pDS009 etc.), none with good coverage, so all are unidentifiable",
+                       "44 10X005 identity rows have no matrix barcode", "the 10X001 matrix has no counts on its 13 MT- features (pct_mito 0 for every cell)"])
+    return Source("adamson16_other_lanes", obs, meta, g.name.to_numpy(), g.id.to_numpy(), mtx_values(tar, "GSM2406677_10X005_matrix.mtx.txt.gz", cfg["integer_sample_values"]))
 
 
 FRANGIEH_CTRL = ("NO_SITE", "ONE_NON-GENE_SITE")
@@ -197,6 +248,73 @@ def scperturb_wessels(cfg):
                 guide_assignment="authors' Guide.Class Single/Dual/NT", matrix="X csr int64", gene_ids="symbols only",
                 flags=["only ~424 NT control cells over 4 lanes", "the repo catalog calls this CRISPRi; it is Cas13"])
     return Source("wessels23", obs, meta, genes, None, vals)
+
+
+WESSELS_TARS = dict(carpool="GSE213957_HEX293FT_and_SpeciesMixing_CaRPool-seq.tar.gz", thp1="GSE213957_THP1-CaRPool-seq_and_GSE213957_HEX293FTstabRNA.tar.gz",
+                    perturbseq="GSE213957_Perturb-seq.tar.gz")
+
+
+def wessels23_hek293ft(cfg):
+    """GEO GSE213957 HEK293FT CaRPool-seq (29 crRNA arrays, one lane shared with species mixing) and stabRNA (stabilized crRNAs, HTO-54 in the four THP-1 lanes)."""
+    d = Path(cfg["root"]) / "raw/wessels23_hek293ft"
+    m = pd.read_csv(d / "GSE213957_HEX293FT_CaRPool-seq.metadata.tsv.gz", sep="\t", index_col=0)
+    s = pd.read_csv(d / "GSE213957_HEX293FTstabRNA.metadata.tsv.gz", sep="\t", index_col=0).sort_values("Lane", kind="stable")
+    nt = (m.TargetGenes == "NT").to_numpy()
+    arrays = frame(len(m), context="wessels23__HEK293FT__CaRPool-seq", cell_type="HEK293FT", condition="unstimulated", donor="HEK293FT", batch="1",
+                   perturbation=np.where(nt, "", [join_targets(x.split("_")) for x in m.TargetGenes]), is_control=nt,
+                   control_kind=np.where(nt, "non_targeting", None), guide=m.Guides.to_numpy(), n_guides=(m.Array.str.count("_") + 1).to_numpy(),
+                   total_counts=m.nCount_RNA.to_numpy(), n_genes=m.nFeature_RNA.to_numpy(), pct_mito=m["percent.mt"].to_numpy())
+    arrays["array"], arrays["hto"], arrays["barcode"] = m.Array.to_numpy(), m["hash.ID"].to_numpy(), m.index.to_numpy()
+    nt = (s.TargetGene == "NT").to_numpy()
+    stab = frame(len(s), context="wessels23__HEK293FT__stabRNA", cell_type="HEK293FT", condition="unstimulated", donor="HEK293FT", batch=s.Lane.to_numpy(),
+                 perturbation=np.where(nt, "", s.TargetGene), is_control=nt, control_kind=np.where(nt, "non_targeting", None), guide=s.bcgRNA.to_numpy(),
+                 n_guides=1.0, total_counts=s.nCount_RNA.to_numpy(), n_genes=s.nFeature_RNA.to_numpy(), pct_mito=s["percent.mt"].to_numpy())
+    stab["array"], stab["guide_umi"], stab["barcode"] = s.Array.to_numpy(), s["UMI.g1"].to_numpy(), s.index.str.split("_").str[1].to_numpy()
+    obs = pd.concat([arrays, stab], ignore_index=True)
+    f = tar_table(d / WESSELS_TARS["carpool"], "HEK293FT_and_SpeciesMixing_CaRPool-seq.GEXGDO.features.tsv.gz", sep="\t", header=None, names=["id", "name", "type"])
+    hg = f[f.id.str.startswith("hg38_")]
+    meta = dict(deposit="GEO GSE213957 HEK293FT_and_SpeciesMixing_CaRPool-seq GEXGDO mtx + HEX293FT_CaRPool-seq.metadata; "
+                        "THP1-CaRPool-seq_and_HEK293FTstabRNA GEXGDO1-4 mtx + HEX293FTstabRNA.metadata",
+                files=[str(d / WESSELS_TARS["carpool"]), str(d / "GSE213957_HEX293FT_CaRPool-seq.metadata.tsv.gz"), str(d / WESSELS_TARS["thp1"]),
+                       str(d / "GSE213957_HEX293FTstabRNA.metadata.tsv.gz")],
+                batch_field="CaRPool-seq: one 10x lane (barcode suffix 1; hash.ID HTO-01..08 kept as obs hto); stabRNA: metadata Lane L1-L4 (the four THP-1 lanes)",
+                batch_kind="technical", modality="Cas13 (CaRPool-seq, RfxCas13d)",
+                cell_calling="authors (Cell Ranger, < 2,500 UMI removed, HTODemux; the metadata lists assigned cells only)",
+                guide_assignment="authors: CaRPool-seq MultiSeqDemux single bcgRNA (Guides = array id, Array = gRNA composition); stabRNA g1/g2 bcgRNA UMI rule",
+                matrix="matrix.mtx.gz integer, features x barcodes", gene_ids="Cell Ranger hg38 (Ensembl 97) ids + symbols; the CaRPool-seq lane also carries mm10 features",
+                flags=["species-mixing cells (mouse, BBO hashtags) and unassigned barcodes of the CaRPool-seq lane are absent from the metadata and excluded",
+                       "stabRNA lane matrices carry 8 transgene features (eGFP, Blast, Cas9, Puro, Cas13d, AsCas12a, MeCP2, KRAB) absent from the CaRPool-seq lane",
+                       "the meaning of hash.ID HTO-01..08 within the CaRPool-seq lane is not stated in the paper; every array is in every HTO"])
+    return Source("wessels23_hek293ft", obs, meta, hg.name.str[5:].to_numpy(), hg.id.str[5:].to_numpy(),
+                  mtx_values(d / WESSELS_TARS["carpool"], "HEK293FT_and_SpeciesMixing_CaRPool-seq.GEXGDO.matrix.mtx.gz", cfg["integer_sample_values"]))
+
+
+def wessels23_perturbseq(cfg):
+    """GEO GSE213957 Perturb-seq arm: HEK293FT Cas9-nuclease, KRAB-dCas9 and KRAB-dCas9-MeCP2 lines with 1-3 sgRNA vectors, one hashed lane."""
+    tar = Path(cfg["root"]) / "raw/wessels23_hek293ft" / WESSELS_TARS["perturbseq"]
+    p = tar_table(tar, "Perturb-seq.metadata.tsv.gz", sep="\t", index_col=0)
+    p = p[p.Experiment == "Perturb-seq"]
+    ref = tar_table(tar, "Perturb-seq.GDO.feature_ref.csv.gz")
+    target_id = {i.split("-")[0]: g for i, g in zip(ref.id, ref.target_gene_id) if g.startswith("ENSG")}
+    nt = (p.TargetGenes == "NT").to_numpy()
+    lab = np.where(nt, "", [join_targets(x.split("/")) for x in p.TargetGenes])
+    obs = frame(len(p), context=("wessels23__HEK293FT__" + p.Type).to_numpy(), cell_type="HEK293FT", condition="unstimulated", timepoint="day 12",
+                donor="HEK293FT", batch=p.Pool.to_numpy(), perturbation=lab, target_ensembl=[target_id.get(x) for x in lab], is_control=nt,
+                control_kind=np.where(nt, "non_targeting", None), guide=p["TargetGuideCombination.detailed"].to_numpy(),
+                n_guides=p.Pool.str[-1].astype(int).to_numpy())
+    obs["barcode"] = p.index.str.split("_").str[0].to_numpy()
+    f = tar_table(tar, "Perturb-seq.GEXGDO.features.tsv.gz", sep="\t", header=None, names=["id", "name", "type"])
+    gex = f[f.type == "Gene Expression"]
+    meta = dict(deposit="GEO GSE213957 Perturb-seq GEXGDO mtx + Perturb-seq.metadata (in the tar) + GDO.feature_ref", files=[str(tar)],
+                batch_field="metadata Pool = hashtag of the cell line x sgRNA-vector pool (n=1, n=2, n=3 vectors), all in one 10x lane",
+                batch_kind="technical (separately transduced pools within one lane)",
+                modality="Cas9 Perturb-seq: CRISPRko (Cas9 nuclease), CRISPRi (KRAB-dCas9), CRISPRi (KRAB-dCas9-MeCP2), one per context",
+                cell_calling="authors (Cell Ranger, HTODemux doublets removed)",
+                guide_assignment="authors (HTODemux on sgRNA features); only cells with the sgRNA number and combination expected for their pool are in the metadata",
+                matrix="matrix.mtx.gz integer, features x barcodes", gene_ids="Cell Ranger hg38 (Ensembl 97) ids + symbols, 8 transgene features",
+                flags=["the metadata carries no per-cell counts (total_counts, n_genes, pct_mito NA)",
+                       "target Ensembl ids from GDO.feature_ref (CD71 = TFRC ENSG00000072274)"])
+    return Source("wessels23_perturbseq", obs, meta, gex.name.to_numpy(), gex.id.to_numpy(), mtx_values(tar, "Perturb-seq.GEXGDO.matrix.mtx.gz", cfg["integer_sample_values"]))
 
 
 def replogle_rows(cfg, name, path, cell_type, deposit, timepoint, extra_flags=()):
@@ -928,9 +1046,12 @@ def xatlas_repo(cfg):
 
 
 
+
+
+
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman,
                                    scperturb_wessels, replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2,
                                    nadig25_jurkat, replogle20, orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc,
                                    cd4t, jiang, mcfaline, viperturb, shifrut18_t_crisprko, mccutcheon23_cd8t_crispri,
                                    mccutcheon23_cd8t_crispra, tian21_neurons_crispri, tian21_neurons_crispra, papalexi21_thp1,
-                                   martinrufino25_hspc]}
+                                   martinrufino25_hspc, adamson16_other_lanes, wessels23_hek293ft, wessels23_perturbseq]}

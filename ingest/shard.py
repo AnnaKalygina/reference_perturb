@@ -19,6 +19,7 @@ from adapters import ADAPTERS  # noqa: E402
 import adapters_more  # noqa: E402,F401
 import adapters_cd4t  # noqa: E402,F401
 import adapters_tcells  # noqa: E402,F401
+import adapters_tar  # noqa: E402,F401
 from config import load, path  # noqa: E402
 from genes import HGNC  # noqa: E402
 from receipts import done, finish, raw_receipt, write_atomic, write_json  # noqa: E402
