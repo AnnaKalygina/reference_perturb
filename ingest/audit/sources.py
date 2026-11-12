@@ -101,7 +101,7 @@ def adamson16(cfg):
                            timepoint=day, donor="K562", batch=gem.to_numpy(), perturbation=np.where(one & ~is_ctrl, targets, ""), is_control=is_ctrl,
                            control_kind=np.where(is_ctrl, "non_targeting", None), guide=ci["guide identity"].to_numpy(),
                            n_guides=ci["number of cells"].fillna(0).to_numpy() * guides_per_vector))
-        parts[-1]["guide_umi"], parts[-1]["barcode"], parts[-1]["gsm"] = ci["UMI count"].to_numpy(), bc.to_numpy(), run
+        parts[-1]["guide_barcode_umi"], parts[-1]["barcode"], parts[-1]["gsm"] = ci["UMI count"].to_numpy(), bc.to_numpy(), run
     obs = pd.concat(parts, ignore_index=True)
     g = tar_table(tar, "GSM2406677_10X005_genes.tsv.gz", sep="\t", header=None, names=["id", "name"])
     meta = dict(deposit="GEO GSE90546_RAW.tar: GSM2406675 (10X001), GSM2406677 (10X005) and GSM2406681 (10X010) matrix.mtx.txt + barcodes + genes + cell_identities.csv",
@@ -265,7 +265,7 @@ def wessels23_hek293ft(cfg):
     stab = frame(len(s), context="wessels23__HEK293FT__stabRNA", cell_type="HEK293FT", condition="unstimulated", donor="HEK293FT", batch=s.Lane.to_numpy(),
                  perturbation=np.where(nt, "", s.TargetGene), is_control=nt, control_kind=np.where(nt, "non_targeting", None), guide=s.bcgRNA.to_numpy(),
                  n_guides=1.0, total_counts=s.nCount_RNA.to_numpy(), n_genes=s.nFeature_RNA.to_numpy(), pct_mito=s["percent.mt"].to_numpy())
-    stab["array"], stab["guide_umi"], stab["barcode"] = s.Array.to_numpy(), s["UMI.g1"].to_numpy(), s.index.str.split("_").str[1].to_numpy()
+    stab["array"], stab["bcgrna_umi"], stab["barcode"] = s.Array.to_numpy(), s["UMI.g1"].to_numpy(), s.index.str.split("_").str[1].to_numpy()
     obs = pd.concat([arrays, stab], ignore_index=True)
     f = tar_table(d / WESSELS_TARS["carpool"], "HEK293FT_and_SpeciesMixing_CaRPool-seq.GEXGDO.features.tsv.gz", sep="\t", header=None, names=["id", "name", "type"])
     hg = f[f.id.str.startswith("hg38_")]
@@ -838,7 +838,7 @@ def shifrut18_t_crisprko(cfg):
         parts.append(frame(len(bc), context=ctx("shifrut18_t_crisprko", "CD8T", donor, cond), cell_type="primary CD8+ T", condition=cond, timepoint="36h",
                            donor=donor, batch=f"{donor}_{cond}", perturbation=np.where(assigned & ~is_ctrl, target, ""), is_control=is_ctrl,
                            control_kind=np.where(is_ctrl, "non_targeting", None), guide=calls["gRNA.ID"].to_numpy(), n_guides=assigned.astype(int)))
-        parts[-1]["guide_umi"] = calls["UMI.count"].to_numpy()
+        parts[-1]["crop_seq_umi"] = calls["UMI.count"].to_numpy()
     obs = pd.concat(parts, ignore_index=True)
     meta = dict(deposit="GEO GSE119450_RAW.tar: GSM3375483-86 {D1N,D1S,D2N,D2S}_matrix.tar.gz (Cell Ranger 2.0 filtered) + GSM3375487-90 CellBC_sgRNA.csv.gz",
                 files=[str(tar)], batch_field="GEO sample = donor x condition (one 10x lane each; sample.name of the guide table)",
@@ -910,7 +910,7 @@ def mccutcheon(cfg, arm):
                            control_kind=np.where(is_ctrl, "non_targeting", None),
                            guide=np.array([";".join(gnames[row]) if row.any() else None for row in called], object),
                            n_guides=nguide, total_counts=tot, n_genes=ngen))
-        parts[-1]["guide_umi"] = umi.max(1)
+        parts[-1]["top_grna_umi"] = umi.max(1)
         parts[-1]["barcode"] = barcodes
         parts[-1]["assigned_by"] = f"paper rule computed here: gRNA UMI >= {min_umi}"
         if len(parts) == 1:
