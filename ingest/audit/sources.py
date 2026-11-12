@@ -760,18 +760,18 @@ def mcfaline(cfg):
         is_ctrl = one & np.isin(g, ["NTC", "random"])
         cond = (m.treatment.fillna("NA") + "_" + m.dose.fillna("NA")).to_numpy()
         parts.append(frame(len(m), context=np.array([f"mcfaline23__{line}__{c}" for c in cond], object), cell_type=line,
-                           condition=cond, donor=line, batch=m.replicate.astype(str).to_numpy(),
+                           condition=cond, donor=line, batch=(m.replicate.astype(str) + "_" + m.PCR_plate.astype(str)).to_numpy(),
                            perturbation=np.where(one & ~is_ctrl, g, ""), is_control=is_ctrl,
                            control_kind=np.where(is_ctrl, np.where(g == "NTC", "non_targeting", "random_sequence"), None),
                            guide=m.gRNA_id.to_numpy(), n_guides=pd.to_numeric(m.guide_number, errors="coerce").to_numpy(),
                            total_counts=pd.to_numeric(m["n.umi"], errors="coerce").to_numpy()))
-        parts[-1]["pcr_plate"] = m.PCR_plate.to_numpy()
+        parts[-1]["replicate"] = m.replicate.to_numpy()
     obs = pd.concat(parts, ignore_index=True)
     vals = np.fromfile(d / "A172/x.bin", np.int32, count=cfg["integer_sample_values"]).astype(float)
     meta = dict(deposit="GEO GSM7056149 (GSE225775) sciPlexGxE_2 preprocessed cds RDS + UMI.count.matrix.gz",
                 files=[str(d.parent), str(Path(cfg["repo_data"]) / "mcfaline23/mcfaline23_gxe_processed.h5ad")],
-                batch_field="colData replicate (replicate_1/2...); PCR_plate also present",
-                batch_kind="biological (replicate wells/plates) - verify", modality="CRISPRi (dCas9-KRAB), kinome library",
+                batch_field="colData replicate and PCR_plate joined (replicate_1_A ...); replicate kept as an obs column",
+                batch_kind="technical (RT/PCR plate) nested in the transduction replicate", modality="CRISPRi (dCas9-KRAB), kinome library",
                 cell_calling="authors (sci-RNA-seq3)", guide_assignment="authors' gene_id / gRNA_id / guide_number",
                 matrix="cds counts (int32 extract)", gene_ids="Ensembl ids + symbols",
                 flags=["drug x dose arms make many small contexts", "'random' guides kept as a second control kind"])
