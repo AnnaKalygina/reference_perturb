@@ -121,3 +121,6 @@ reader:
   batch_depth_low_fraction: 0.5
   batch_control_shift_mad: 3.0
   min_cells_for_effect: 20
+  knockdown_p: 0.01
+  knockdown_ratio_down: 0.9
+  knockdown_ratio_up: 1.1

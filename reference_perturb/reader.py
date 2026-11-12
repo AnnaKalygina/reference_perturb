@@ -133,6 +133,15 @@ class Reference:
     def pert_qc(self, context):
         return pd.read_parquet(self.root / "deltas" / self.dataset(context) / context / "pert_qc.parquet")
 
+    def knockdown_visible(self, context, profile="authors", half="all"):
+        """Per perturbation: target present, n >= min_cells_for_effect, knockdown p below the threshold, and the ratio past it in the dataset's direction or undefined because no control expresses the target."""
+        r = self.cfg["reader"]
+        q = self.pert_qc(context)
+        q = q[(q.profile == profile) & (q.half == half)].set_index("perturbation")
+        up = self.dataset(context) in self.cfg["perturbation_direction"]["up"]
+        moved = q.knockdown_ratio > r["knockdown_ratio_up"] if up else q.knockdown_ratio < r["knockdown_ratio_down"]
+        return q.target.notna() & (q.n >= r["min_cells_for_effect"]) & (q.knockdown_p < r["knockdown_p"]) & (moved | q.knockdown_ratio.isna())
+
     def masks(self, context, profile="authors"):
         """G0 (detected in >= 5 % of controls), per-target masks and 5 kb TSS neighbor masks over the measured genes."""
         g = self.measured_genes(context)
