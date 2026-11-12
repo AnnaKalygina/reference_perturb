@@ -54,12 +54,11 @@ controls:
   not_used_kinds: [unassigned, non_targeting_spike_in]
   including_unassigned: [feng]
 
-hesc_guide_min_umi: 20
-mccutcheon_guide_min_umi: 5
+guide_call_min_umi: {hesc: 20, mccutcheon23_cd8t_crispri: 5, mccutcheon23_cd8t_crispra: 5}
 
 perturbation_direction:
   default: down
-  up: [scperturb_norman, joung23_tf_atlas, mccutcheon23_cd8t_crispra]
+  up: [scperturb_norman, joung23_tf_atlas, mccutcheon23_cd8t_crispra, tian21_neurons_crispra]
 
 cell_rules:
   default:
@@ -82,6 +81,8 @@ cell_rules:
     shifrut18_t_crisprko: Shifrut et al. 2018 Cell, cells with more than one assigned guide filtered out; the deposited calls list one guide per cell
     mccutcheon23_cd8t_crispri: McCutcheon et al. 2023 Nat Genet Methods, gRNAs assigned at gRNA UMI > 4 and cells grouped by gRNA identity (guide-less cells in no group, controls are cells with only NT gRNAs); the paper does not exclude multi-gRNA cells, the default rule drops them
     mccutcheon23_cd8t_crispra: McCutcheon et al. 2023 Nat Genet Methods, same rule as mccutcheon23_cd8t_crispri
+    tian21_neurons_crispri: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
+    tian21_neurons_crispra: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
 
 shard:
   bucket_rows: 65536

@@ -10,7 +10,7 @@ control_bins: [20, 50, 100]
 min_control_candidates: [5, 10, 20, 30, 50, 100]
 min_cells_per_perturbation: 10
 integer_sample_values: 2000000
-hesc_guide_min_umi: 20
+guide_call_min_umi: {hesc: 20, mccutcheon23_cd8t_crispri: 5, mccutcheon23_cd8t_crispra: 5}
 controls_including_unassigned: [feng]
 n_eff_flag_ratio: 4
 control_kinds_not_used: [unassigned, non_targeting_spike_in]

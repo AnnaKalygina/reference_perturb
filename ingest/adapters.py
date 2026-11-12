@@ -18,8 +18,7 @@ CHUNK = 20000
 def audit_cfg(cfg):
     """Config dict in the shape the audit loaders expect."""
     return dict(root=cfg["root"], vcc_data=cfg["paths"]["vcc_data"], repo_data=cfg["paths"]["repo_data"], hgnc=cfg["paths"]["hgnc"],
-                vcc_rscript=cfg["paths"]["vcc_rscript"], integer_sample_values=1000, hesc_guide_min_umi=cfg["hesc_guide_min_umi"],
-                mccutcheon_guide_min_umi=cfg["mccutcheon_guide_min_umi"])
+                vcc_rscript=cfg["paths"]["vcc_rscript"], integer_sample_values=1000, guide_call_min_umi=cfg["guide_call_min_umi"])
 
 
 def read_sparse(h, key):
