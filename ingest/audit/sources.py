@@ -549,7 +549,7 @@ def dld1(cfg):
     n = len(c)
     ntc = (c.assignment_v2 == "NTC").to_numpy()
     spike = c.assignment_v2.str.startswith("NTC_MENG").to_numpy()
-    single = (c.demux_type_v2 == "singlet").to_numpy() & (c.demux_type == "singlet").to_numpy()
+    single = (c.demux_type_v2 == "singlet").to_numpy()
     is_ctrl = ntc & single
     lab = np.where(single & ~ntc & ~spike, c.assignment_v2, "")
     obs = frame(n, context="gse337988__DLD1", cell_type="DLD-1", condition="unstimulated",
@@ -558,6 +558,7 @@ def dld1(cfg):
                 guide=c.guide_name.to_numpy(), n_guides=np.where(c.demux_type_v2 == "singlet", 1, np.where(c.demux_type_v2 == "doublet", 2, 0)),
                 total_counts=pd.to_numeric(c["total.counts"]).to_numpy(), pct_mito=100 * pd.to_numeric(c["frac.mt"]).to_numpy())
     obs["biological_replicate"] = c.Biological_replicate.to_numpy()
+    obs["demux_first_pass"] = c.demux_type.to_numpy()
     with h5py.File(d / "GSE337988_sublib2_processed_objects_Low_assays.h5", "r") as h:
         vals = np.asarray(h["assay001"][:200]).ravel()
     meta = dict(deposit="GEO GSE337988 sublib2_processed_objects_Low_assays.h5 + low_coldata/rowdata.csv.gz",

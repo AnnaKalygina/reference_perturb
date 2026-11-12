@@ -77,7 +77,7 @@ cell_rules:
     hesc: Pan et al. 2026, exactly one sgRNA with at least 20 barcode counts
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
-    dld1: Yeung et al. 2026, low-MOI singlets are the reference
+    dld1: Yeung et al. 2026, fishash guide assignment and CMO hashtag demultiplexing; a cell is a singlet by the authors' final call demux_type_v2 == singlet (the first-pass demux_type is kept as obs demux_first_pass, not required); NTC_MENG3/4 are non_targeting_spike_in and not used
     shifrut18_t_crisprko: Shifrut et al. 2018 Cell, cells with more than one assigned guide filtered out; the deposited calls list one guide per cell
     mccutcheon23_cd8t_crispri: McCutcheon et al. 2023 Nat Genet Methods, gRNAs assigned at gRNA UMI > 4 and cells grouped by gRNA identity (guide-less cells in no group, controls are cells with only NT gRNAs); the paper does not exclude multi-gRNA cells, the default rule drops them
     mccutcheon23_cd8t_crispra: McCutcheon et al. 2023 Nat Genet Methods, same rule as mccutcheon23_cd8t_crispri
