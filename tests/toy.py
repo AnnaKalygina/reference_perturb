@@ -76,6 +76,7 @@ def make_root(tmp):
                       end=np.arange(18) * 10000 + 5000, strand="+", tss=np.arange(18) * 10000 + 1, version="1")).to_csv(
         tmp / "config" / "genes_ensembl112.tsv.gz", sep="\t", index=False, compression="gzip")
     shutil.copy(ROOT / "config" / "cell_cycle_genes.tsv", tmp / "config" / "cell_cycle_genes.tsv")
+    shutil.copy(ROOT / "config" / "deposits.yaml", tmp / "config" / "deposits.yaml")
     return tmp
 
 

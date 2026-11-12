@@ -1,4 +1,4 @@
-"""Frozen configuration: one YAML, its hash, and the code commit at run time."""
+"""Frozen configuration: one YAML, its hash, the code commit at run time, and the unhashed deposit table."""
 import hashlib
 import json
 import subprocess
@@ -13,9 +13,10 @@ UNHASHED_KEYS = ["slurm", "reader"]
 
 
 def load():
-    """Config dict with `root`, `hash` and `commit` filled in."""
+    """Config dict with `deposits`, `root`, `hash` and `commit` filled in."""
     cfg = yaml.safe_load(open(CONFIG / "ingest.yaml"))
     cfg["hash"] = config_hash(cfg)
+    cfg["deposits"] = yaml.safe_load(open(CONFIG / "deposits.yaml"))
     cfg["root"] = str(ROOT)
     cfg["commit"], cfg["dirty"] = commit()
     return cfg

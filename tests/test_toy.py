@@ -1,4 +1,5 @@
 """The toy context through shard, moments and deltas, with hand-checkable identities."""
+import json
 import sys
 from pathlib import Path
 
@@ -13,6 +14,13 @@ sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / "ingest"))
 sys.path.insert(0, str(ROOT / "ingest" / "audit"))
 import toy  # noqa: E402
+
+MANIFEST_KEYS = ["batch_definition", "batch_kind", "cas_system", "cell_counts_table", "cells_kept", "cells_per_batch", "context", "control_definition",
+                 "controls_per_batch", "dataset", "deposit", "deposit_url", "dropped_cells", "gate", "gene_mapping", "guide_assignment", "harvest_time",
+                 "lib_size_rule", "modality", "moi_design", "pert_qc_table", "perturbation_direction", "publication", "selection_protocol", "sources"]
+SOURCE_KEYS = ["batch_definition", "cas_system", "control_definition", "deposit_url", "dropped_cells", "gate", "guide_assignment", "harvest_time",
+               "lib_size_rule", "modality", "moi_design", "perturbation_direction", "publication", "selection_protocol"]
+DEPOSIT_KEYS = ["cas_system", "deposit_url", "harvest_time", "moi_design", "publication", "selection_protocol", "study"]
 
 
 def build(tmp, shallow=()):
@@ -136,6 +144,15 @@ def test_g0_and_masks(built):
     assert mk["g0"].sum() == 17
     assert mk["target"]("ENSG00000900002").sum() == 1
     assert mk["neighbors"]("ENSG00000900002").sum() == 0
+
+
+def test_manifest_schema(built):
+    m = json.loads((built["root"] / "manifest/toy__ctx.json").read_text())
+    assert sorted(m) == MANIFEST_KEYS
+    assert sorted(m["sources"]) == SOURCE_KEYS
+    assert m["cell_counts_table"] == "suffstats/toy/toy__ctx/cell_counts.parquet" and m["pert_qc_table"] == "deltas/toy/toy__ctx/pert_qc.parquet"
+    assert m["sources"]["publication"] == "config/deposits.yaml" and m["publication"] is None
+    assert all(sorted(v) == DEPOSIT_KEYS for v in built["cfg"]["deposits"].values())
 
 
 def test_variance_matches_numpy(built):
