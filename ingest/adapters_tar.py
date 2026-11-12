@@ -1,4 +1,4 @@
-"""Adapters for GEO tar deposits read in place: the Wessels 2023 HEK293FT arms and the Adamson 2016 pilot and epistasis lanes (matrix.mtx members)."""
+"""Adapters for GEO tar deposits read in place: the Wessels 2023 HEK293FT arms and the Adamson 2016 lanes (matrix.mtx members)."""
 import gzip
 import sys
 import tarfile
@@ -127,10 +127,10 @@ class WesselsPerturbSeq(TarUnits):
         yield from chunks_of(mtx_cells(self.tar(), "Perturb-seq.GEXGDO.matrix.mtx.gz", self.gene_rows()[0], cols))
 
 
-class AdamsonOtherLanes(TarUnits):
+class Adamson(TarUnits):
     """GSE90546_RAW.tar: one unit per GEO sample over every barcode of its matrix.mtx member."""
 
-    dataset, loader = "adamson16_other_lanes", staticmethod(sources.adamson16_other_lanes)
+    dataset, loader = "adamson16", staticmethod(sources.adamson16)
 
     def units(self):
         return list(ADAMSON_RUNS)
@@ -150,4 +150,4 @@ class AdamsonOtherLanes(TarUnits):
         yield from chunks_of(mtx_cells(self.tar(), f"{unit}_matrix.mtx.txt.gz", np.arange(len(self.features(unit)[0])), cols))
 
 
-ADAPTERS.update({a.dataset: a for a in [WesselsHEK293FT, WesselsPerturbSeq, AdamsonOtherLanes]})
+ADAPTERS.update({a.dataset: a for a in [WesselsHEK293FT, WesselsPerturbSeq, Adamson]})

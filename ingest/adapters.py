@@ -97,11 +97,6 @@ class ScPerturb(Adapter):
         yield from chunks_of(m)
 
 
-class Adamson(ScPerturb):
-    dataset, loader = "scperturb_adamson", staticmethod(sources.scperturb_adamson)
-    path = staticmethod(lambda cfg: Path(cfg["paths"]["vcc_data"]) / "raw/scperturb/AdamsonWeissman2016_GSM2406681_10X010.h5ad")
-
-
 class Frangieh(ScPerturb):
     dataset, loader = "scperturb_frangieh", staticmethod(sources.scperturb_frangieh)
     path = staticmethod(lambda cfg: Path(cfg["paths"]["vcc_data"]) / "raw/scperturb/FrangiehIzar2021_RNA.h5ad")
@@ -195,4 +190,4 @@ class Replogle20(Adapter):
         yield from chunks_of(m)
 
 
-ADAPTERS = {a.dataset: a for a in [Adamson, Frangieh, Sunshine, Norman, Wessels, ReplogleK562, ReplogleRPE1, ReplogleGWPS, NadigHepG2, NadigJurkat, Replogle20]}
+ADAPTERS = {a.dataset: a for a in [Frangieh, Sunshine, Norman, Wessels, ReplogleK562, ReplogleRPE1, ReplogleGWPS, NadigHepG2, NadigJurkat, Replogle20]}

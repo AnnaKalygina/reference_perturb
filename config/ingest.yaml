@@ -64,7 +64,7 @@ cell_rules:
   default:
     keep: exactly_one_assigned_construct
     drop: [no_guide, multi_guide]
-  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20, wessels23_hek293ft, wessels23_perturbseq, adamson16_other_lanes]
+  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20, wessels23_hek293ft, wessels23_perturbseq, adamson16]
   high_moi_combinations_kept: [scperturb_sunshine]
   feng:
     keep: [exactly_one_guide, unassigned_as_controls]
@@ -87,7 +87,7 @@ cell_rules:
     martinrufino25_hspc: Martin-Rufino et al. 2025 Science (bioRxiv methods), one sgRNA per cell from the CROP-seq enrichment library; cells without a detected sgRNA (8.9%) are not deposited, no multi-guide class
     wessels23_hek293ft: Wessels et al. 2023 Nat Methods, cells without a bcgRNA and cells with multiple bcgRNA assignments removed (CaRPool-seq MultiSeqDemux; stabRNA g1/g2 UMI rule); only assigned cells deposited
     wessels23_perturbseq: Wessels et al. 2023 Nat Methods, HTODemux doublets removed and only cells with the sgRNA number and combination of their pool retained; only those cells deposited
-    adamson16_other_lanes: Adamson et al. 2016 Cell, one good-coverage guide barcode identity assigned, two or more a multiple, none unidentifiable
+    adamson16: Adamson et al. 2016 Cell, one good-coverage guide barcode identity assigned, two or more a multiple, none unidentifiable
     joung23_tf_atlas: Joung et al. 2023 Cell, STAR Methods "SHARE-seq data preprocessing", one TF ORF per cell (top barcode with >10 reads and >50% more reads than the second); cells without a mapped ORF excluded by the authors
 
 shard:
@@ -112,8 +112,8 @@ slurm:
     shard: {default: 16, cd4t: 32, feng: 32, jiang: 24, kolf: 24, orion_hct116: 32, orion_hek293t: 32, scperturb_frangieh: 24, scperturb_wessels: 8, vcc2025_h1: 32, viperturb: 32}
     moments: {default: 8, cd4t: 16, kolf: 16, mcfaline: 16, nadig25_hepg2: 16, nadig25_jurkat: 16, orion_hct116: 24, orion_hek293t: 32, replogle22_gwps: 16, replogle22_k562: 16, replogle22_rpe1: 16, scperturb_sunshine: 16, joung23_tf_atlas: 16}
     deltas: {default: 8}
-    validate: {default: 8, feng: 16, hesc: 16, kolf: 16, orion_hct116: 16, orion_hek293t: 16, scperturb_adamson: 16, joung23_tf_atlas: 32, martinrufino25_hspc: 16, tian21_neurons_crispri: 16, tian21_neurons_crispra: 16}
-    scores: {default: 8, cd4t: 48, dld1: 16, hesc: 16, jiang: 32, kolf: 24, mcfaline: 16, orion_hct116: 32, orion_hek293t: 32, replogle22_gwps: 16, scperturb_adamson: 24, scperturb_frangieh: 24, scperturb_sunshine: 16, vcc2025_h1: 16, viperturb: 16, joung23_tf_atlas: 16, martinrufino25_hspc: 16}
+    validate: {default: 8, feng: 16, hesc: 16, kolf: 16, orion_hct116: 16, orion_hek293t: 16, adamson16: 16, joung23_tf_atlas: 32, martinrufino25_hspc: 16, tian21_neurons_crispri: 16, tian21_neurons_crispra: 16}
+    scores: {default: 8, cd4t: 48, dld1: 16, hesc: 16, jiang: 32, kolf: 24, mcfaline: 16, orion_hct116: 32, orion_hek293t: 32, replogle22_gwps: 16, adamson16: 24, scperturb_frangieh: 24, scperturb_sunshine: 16, vcc2025_h1: 16, viperturb: 16, joung23_tf_atlas: 16, martinrufino25_hspc: 16}
   large_shards: [orion_hct116, orion_hek293t, kolf, cd4t]
   rerun_memory_factor: 1.3
 

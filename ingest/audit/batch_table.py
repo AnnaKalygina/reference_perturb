@@ -15,7 +15,7 @@ R22 = ("ReplogleWeissman2022", "https://doi.org/10.1016/j.cell.2022.05.013", "10
 NADIG = ("NadigOConnor2025", "https://doi.org/10.1038/s41588-025-02169-3", "10x Genomics Chromium 3' v3 with direct guide capture")
 ORION = ("HuangChu2025", "https://doi.org/10.1101/2025.06.11.659105", "10x Genomics GEM-X 5' v3 with CRISPR feature barcoding, fixed and cryopreserved cells (FiCS)")
 STUDY = {
-    "scperturb_adamson": ("AdamsonWeissman2016", "https://doi.org/10.1016/j.cell.2016.11.048", "10x Genomics 3' (Perturb-seq, guide barcode in an expressed transcript)"),
+    "adamson16": ("AdamsonWeissman2016", "https://doi.org/10.1016/j.cell.2016.11.048", "10x Genomics 3' (Perturb-seq, guide barcode in an expressed transcript)"),
     "scperturb_frangieh": ("FrangiehIzar2021", "https://doi.org/10.1038/s41588-021-00779-1", "10x Genomics 3' RNA + CITE-seq protein (Perturb-CITE-seq)"),
     "scperturb_sunshine": ("SunshineHein2023", "https://doi.org/10.1038/s41467-023-41788-4", "10x Genomics 3' with guide capture (kit not verified)"),
     "scperturb_norman": ("NormanWeissman2019", "https://doi.org/10.1126/science.aax4438", "10x Genomics Chromium 3' v2"),
