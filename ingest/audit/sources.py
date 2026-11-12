@@ -180,27 +180,35 @@ def scperturb_frangieh(cfg):
     return Source("frangieh21", obs, meta, genes, ens, vals)
 
 
+SUNSHINE_GUIDE_SETS_PER_CELL = {"exact_match": 1, "likely_match": 1, "scrambled_pair": 2, "multiplet": 2, "no_match": 0}
+
+
 def scperturb_sunshine(cfg):
-    """scPerturb SunshineHein2023, identical file in repo and VCC2026."""
+    """scPerturb SunshineHein2023, identical file in repo and VCC2026; assigned cells are the authors' exact matches to one library element."""
     p = Path(cfg["vcc_data"]) / "raw/scperturb/SunshineHein2023.h5ad"
     with h5py.File(p, "r") as h:
+        match = pd.Series(col(h, "obs/match_type"), dtype="object").fillna("")
         pert = pd.Series(col(h, "obs/perturbation"), dtype="object").fillna("")
         n = len(pert)
-        is_ctrl = (pert == "control").to_numpy()
-        lab = np.array([join_targets(x.split("_")) if x and x != "control" else "" for x in pert], object)
+        exact = (match == "exact_match").to_numpy()
+        is_ctrl = exact & (pert == "control").to_numpy()
+        lab = np.where(exact & ~is_ctrl, [join_targets(x.split("_")) for x in pert], "")
         obs = frame(n, context="sunshine23__Calu3", cell_type="Calu-3", condition="unstimulated", donor="Calu-3",
                     batch=col(h, "obs/gem_group").astype(str), perturbation=lab, is_control=is_ctrl,
-                    control_kind=np.where(is_ctrl, "non_targeting", None), guide=col(h, "obs/guide_id"),
-                    n_guides=col(h, "obs/nperts"), total_counts=col(h, "obs/ncounts"), n_genes=col(h, "obs/ngenes"),
+                    control_kind=np.where(is_ctrl, "non_targeting", None), guide=col(h, "obs/matched_library_element"),
+                    n_guides=match.map(SUNSHINE_GUIDE_SETS_PER_CELL).to_numpy(), total_counts=col(h, "obs/ncounts"), n_genes=col(h, "obs/ngenes"),
                     pct_mito=col(h, "obs/percent_mito"))
         genes, ens = col(h, "var/gene_symbol"), col(h, "var/ensembl_id")
         vals = matrix_values(h, "X", cfg["integer_sample_values"])
     meta = dict(deposit="Zenodo 10044268 SunshineHein2023.h5ad (scPerturb)",
                 files=[str(p), str(Path(cfg["repo_data"]) / "sunshine23/sunshine23_downloaded.h5ad")],
                 batch_field="obs/gem_group (10x GEM group = lane)", batch_kind="technical",
-                modality="CRISPRi (high MOI)", cell_calling="authors", guide_assignment="authors; high MOI, nperts up to 40+",
+                modality="CRISPRi", cell_calling="authors",
+                guide_assignment="authors' match of the called guide set to one dual-sgRNA library element (obs/match_type): exact_match assigned; likely_match, scrambled_pair, multiplet and no_match unassigned",
                 matrix="X csc int64", gene_ids="symbols + ensembl_id",
-                flags=["high-MOI design: most perturbed cells carry several targets"])
+                flags=["low-MOI (~0.1) library of 239 elements; the 22 two-gene elements are designed combinations",
+                       f"{int((match == 'likely_match').sum()):,} likely_match cells unassigned (n_guides 1, dropped as no_guide)",
+                       "the authors' 55-cells-per-element rule and bottom-2% UMI and >20% mito filters are not applied"])
     return Source("sunshine23", obs, meta, genes, ens, vals)
 
 

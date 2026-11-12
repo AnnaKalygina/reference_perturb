@@ -26,9 +26,7 @@ def apply_rules(obs, dataset, cfg):
     reason = np.full(len(obs), "", object)
     reason[kind == "unassigned"] = "no_guide"
     reason[(kind == "unassigned") & (ng > 1)] = "multi_guide"
-    if dataset in rules.get("designed_combinations_kept", []) or dataset in rules.get("high_moi_combinations_kept", []):
-        pass
-    else:
+    if dataset not in rules.get("designed_combinations_kept", []):
         reason[kind == "combo"] = "multi_guide"
     if dataset == "feng":
         feng_ctrl = (kind == "unassigned") & obs.control_kind.eq("unassigned").to_numpy()

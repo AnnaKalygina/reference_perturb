@@ -64,15 +64,14 @@ cell_rules:
   default:
     keep: exactly_one_assigned_construct
     drop: [no_guide, multi_guide]
-  designed_combinations_kept: [scperturb_norman, scperturb_wessels, replogle20, wessels23_hek293ft, wessels23_perturbseq, adamson16_other_lanes]
-  high_moi_combinations_kept: [scperturb_sunshine]
+  designed_combinations_kept: [scperturb_norman, scperturb_wessels, scperturb_sunshine, replogle20, wessels23_hek293ft, wessels23_perturbseq, adamson16_other_lanes]
   feng:
     keep: [exactly_one_guide, unassigned_as_controls]
   dld1:
     keep: low_moi_singlets
   authority:
     default: every checked paper except Feng excludes guide-less cells and treats undesigned multi-guide cells as doublets; Anna 2026-11-04
-    scperturb_sunshine: high-MOI multi-target design kept as combinations with n_targets (reference_dataset.md section 9; Anna 2026-11-04 review)
+    scperturb_sunshine: Sunshine et al. 2023 Nat Commun, Methods, only cells with one guide set per cell (obs match_type exact_match, one matched dual-sgRNA library element; the 22 two-gene elements are designed combinations); the 55-cells-per-element rule and the bottom-2% UMI and >20% mito filters are not applied
     scperturb_frangieh: multi-guide cells dropped (Anna 2026-11-04 evening)
     hesc: Pan et al. 2026, exactly one sgRNA with at least 20 barcode counts
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
