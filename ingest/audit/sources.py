@@ -1031,14 +1031,16 @@ JOUNG_ATLAS = "GSE217460_210322_TFAtlas_raw.h5ad"
 
 
 def joung_atlas(cfg):
-    """Decompressed TF Atlas h5ad under tmp/, written from the deposit's .gz when absent."""
-    out = Path(cfg["root"]) / "tmp" / "joung23_tf_atlas" / JOUNG_ATLAS
+    """Decompressed TF Atlas h5ad under raw/, written from the deposit's .gz when absent, with a receipt derived from the .gz."""
+    gz = Path(cfg["root"]) / "raw" / "joung23_tf_atlas" / (JOUNG_ATLAS + ".gz")
+    out = gz.with_suffix("")
     if not out.exists():
-        out.parent.mkdir(parents=True, exist_ok=True)
         part = out.with_name(f".{out.name}.{os.getpid()}.part")
-        with gzip.open(Path(cfg["root"]) / "raw" / "joung23_tf_atlas" / (JOUNG_ATLAS + ".gz"), "rb") as src, open(part, "wb") as dst:
+        with gzip.open(gz, "rb") as src, open(part, "wb") as dst:
             shutil.copyfileobj(src, dst, 1 << 24)
         os.replace(part, out)
+    from receipts import raw_receipt
+    raw_receipt(dict(cfg, root=cfg["root"]), "joung23_tf_atlas", out, derived_from=str(gz))
     return out
 
 
