@@ -27,7 +27,7 @@ from receipts import done, finish, raw_receipt, write_atomic, write_json  # noqa
 OBS_COLUMNS = ["dataset", "context", "cell_type", "condition", "timepoint", "modality", "donor", "batch", "batch_kind", "kind", "perturbation",
                "target_ensembl", "n_targets", "guide", "n_guides", "is_control", "control_kind", "control_used", "deposit_row", "lib_size",
                "total_counts_stored", "total_counts_author", "n_genes", "pct_mito", "pct_mito_author", "pct_mito_lower_bound", "guide_umi",
-               "assigned_by", "qc_genes_500", "qc_mito_20", "qc_guide_20", "qc_umi_1000", "qc_lane_flag", "qc_strict", "half", "high_moi_design"]
+               "assigned_by", "qc_genes_500", "qc_mito_20", "qc_guide_20", "qc_umi_1000", "qc_lane_flag", "qc_strict", "half"]
 
 
 def prepare_obs(obs, dataset, adapter, cfg, fmap, axis):
@@ -45,7 +45,6 @@ def prepare_obs(obs, dataset, adapter, cfg, fmap, axis):
     obs["target_ensembl"] = np.where(perturbed, ens, None)
     obs["n_targets"] = np.where(perturbed, nt, 0)
     obs["control_used"] = (obs.kind == "control") & obs.control_kind.isin(cfg["controls"]["is_control_kinds"] + (["unassigned"] if dataset in cfg["controls"]["including_unassigned"] else []))
-    obs["high_moi_design"] = dataset in cfg["cell_rules"].get("high_moi_combinations_kept", [])
     obs["modality"] = adapter.meta.get("modality", "")
     obs["batch_kind"] = adapter.meta.get("batch_kind", "")
     if "assigned_by" not in obs:
