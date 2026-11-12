@@ -1,5 +1,4 @@
-"""Primary T cell Perturb-seq deposits (Schmidt 2022, Shifrut 2018): MatrixMarket matrices streamed in cell chunks."""
-import gzip
+"""Shifrut 2018 primary T cell deposit: MatrixMarket matrices streamed in cell chunks."""
 import sys
 from pathlib import Path
 
@@ -43,30 +42,6 @@ def mtx_cell_chunks(fh, n_features, n_cells):
     yield first, cells_csr(pd.concat(pending, ignore_index=True), first, n_cells - first, n_features)
 
 
-class Schmidt22(Adapter):
-    """GEO GSE190604 cellranger aggr matrix.mtx.gz, gene-expression features only."""
-
-    dataset, loader = "schmidt22_t_crispra", staticmethod(sources.schmidt22_t_crispra)
-
-    def dir(self):
-        return path(self.cfg, "raw", "schmidt22_t_crispra")
-
-    def feature_table(self):
-        return pd.read_csv(self.dir() / "GSE190604_features.tsv.gz", sep="\t", header=None, names=["id", "name", "type"])
-
-    def features(self, unit):
-        f = self.feature_table()
-        gex = f[f.type == "Gene Expression"]
-        return gex.id.to_numpy(), gex.name.to_numpy()
-
-    def chunks(self, unit):
-        gex = (self.feature_table().type == "Gene Expression").to_numpy()
-        with gzip.open(self.dir() / "GSE190604_matrix.mtx.gz", "rb") as fh:
-            n_features, n_cells = mtx_header(fh)
-            for start, m in mtx_cell_chunks(fh, n_features, n_cells):
-                yield start, m[:, gex]
-
-
 class Shifrut18(Adapter):
     """GEO GSE119450_RAW.tar: four Cell Ranger matrix.mtx read from the nested archives in sample order."""
 
@@ -95,4 +70,4 @@ class Shifrut18(Adapter):
             start += n_cells
 
 
-ADAPTERS.update({a.dataset: a for a in [Schmidt22, Shifrut18]})
+ADAPTERS.update({a.dataset: a for a in [Shifrut18]})

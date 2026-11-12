@@ -637,48 +637,12 @@ def viperturb(cfg):
     return Source("viperturb", obs, meta, None, None, vals)
 
 
-SCHMIDT_WELLS = {str(i + 1): w for i, w in enumerate([f"{c}-well{k}" for c in ("nostim", "stim") for k in (1, 2, 3, 4)])}
-SCHMIDT_MIN_GUIDE_UMI = 5
-
-
 def mtx_values(fh, n):
     """The first n stored values of a MatrixMarket byte stream."""
     line = fh.readline()
     while line.startswith(b"%"):
         line = fh.readline()
     return np.array([float(fh.readline().split()[2]) for _ in range(n)])
-
-
-def schmidt22_t_crispra(cfg):
-    """Schmidt 2022 CRISPRa Perturb-seq in bulk primary T cells (GEO GSE190604): cellranger aggr matrix + aggregated protospacer calls."""
-    d = Path(cfg["root"]) / "raw/schmidt22_t_crispra"
-    f = pd.read_csv(d / "GSE190604_features.tsv.gz", sep="\t", header=None, names=["id", "name", "type"])
-    bc = pd.read_csv(d / "GSE190604_barcodes.tsv.gz", header=None)[0]
-    calls = pd.read_csv(d / "GSE190604_cellranger-guidecalls-aggregated-unfiltered.txt.gz", sep="\t").set_index("cell_barcode").reindex(bc)
-    n = len(bc)
-    well = bc.str.split("-").str[1].map(SCHMIDT_WELLS)
-    cond = well.str.split("-").str[0].to_numpy()
-    ng = calls.num_features.fillna(0).to_numpy(int)
-    umi = pd.to_numeric(calls.num_umis, errors="coerce")
-    single = (ng == 1) & (umi >= SCHMIDT_MIN_GUIDE_UMI).to_numpy()
-    target = calls.feature_call.astype(str).str.rsplit("-", n=1).str[0].to_numpy()
-    is_ctrl = single & (target == "NO-TARGET")
-    obs = frame(n, context=np.array([ctx("schmidt22_t_crispra", "bulkT", c) for c in cond], object), cell_type="primary bulk CD3+ T",
-                condition=cond, timepoint="24h", donor="two_donors_pooled", batch=well.to_numpy(), perturbation=np.where(single & ~is_ctrl, target, ""),
-                is_control=is_ctrl, control_kind=np.where(is_ctrl, "non_targeting", None), guide=calls.feature_call.to_numpy(), n_guides=ng)
-    obs["guide_umi"] = umi.to_numpy()
-    gex = (f.type == "Gene Expression").to_numpy()
-    meta = dict(deposit="GEO GSE190604 cellranger aggr filtered matrix (matrix.mtx, features.tsv, barcodes.tsv) + cellranger-guidecalls-aggregated-unfiltered.txt",
-                files=[str(d / f"GSE190604_{x}") for x in ("matrix.mtx.gz", "features.tsv.gz", "barcodes.tsv.gz", "cellranger-guidecalls-aggregated-unfiltered.txt.gz")],
-                batch_field="aggregated barcode suffix 1-8 = 10x well (four replicate wells per condition, GEO mRNA-{nostim,stim}-well1..4 in aggr order)",
-                batch_kind="technical", modality="CRISPRa (dCas9-VP64 + SAM direct-capture sgRNA)", cell_calling="authors (Cell Ranger 6.1.1 aggr filtered barcodes)",
-                guide_assignment=f"authors' Cell Ranger protospacer calls: num_features == 1 and num_umis >= {SCHMIDT_MIN_GUIDE_UMI} as in the paper; "
-                                 "num_features counts called sgRNAs (0 when the barcode has no call)",
-                matrix="matrix.mtx integer, 36601 genes + 154 sgRNA features (sgRNA rows dropped)", gene_ids="Cell Ranger GRCh38-2020-A (Ensembl ids + symbols)",
-                flags=["two blood donors mixed 1:1 in every well; the authors' Souporcell donor calls are not deposited, so donor is unknown per cell",
-                       "bulk CD3+ T cells: CD4 and CD8 are not labelled in the deposit",
-                       f"{int(((ng == 1) & ~single).sum())} single-sgRNA droplets below {SCHMIDT_MIN_GUIDE_UMI} sgRNA UMIs are unassigned"])
-    return Source("schmidt22_t_crispra", obs, meta, f.name[gex].to_numpy(), f.id[gex].to_numpy(), mtx_values(gzip.open(d / "GSE190604_matrix.mtx.gz", "rb"), cfg["integer_sample_values"]))
 
 
 SHIFRUT_SAMPLES = {"D1N": ("D1", "NoStim"), "D1S": ("D1", "Stim"), "D2N": ("D2", "NoStim"), "D2S": ("D2", "Stim")}
@@ -712,14 +676,14 @@ def shifrut18_t_crisprko(cfg):
         target = calls["gRNA.ID"].astype(str).str.split(".").str[2].to_numpy()
         assigned = calls["gRNA.ID"].notna().to_numpy()
         is_ctrl = assigned & (target == "NonTarget")
-        parts.append(frame(len(bc), context=ctx("shifrut18_t_crisprko", "CD8T", cond), cell_type="primary CD8+ T", condition=cond, timepoint="36h",
+        parts.append(frame(len(bc), context=ctx("shifrut18_t_crisprko", "CD8T", donor, cond), cell_type="primary CD8+ T", condition=cond, timepoint="36h",
                            donor=donor, batch=f"{donor}_{cond}", perturbation=np.where(assigned & ~is_ctrl, target, ""), is_control=is_ctrl,
                            control_kind=np.where(is_ctrl, "non_targeting", None), guide=calls["gRNA.ID"].to_numpy(), n_guides=assigned.astype(int)))
         parts[-1]["guide_umi"] = calls["UMI.count"].to_numpy()
     obs = pd.concat(parts, ignore_index=True)
     meta = dict(deposit="GEO GSE119450_RAW.tar: GSM3375483-86 {D1N,D1S,D2N,D2S}_matrix.tar.gz (Cell Ranger 2.0 filtered) + GSM3375487-90 CellBC_sgRNA.csv.gz",
                 files=[str(tar)], batch_field="GEO sample = donor x condition (one 10x lane each; sample.name of the guide table)",
-                batch_kind="technical (lane), one lane per donor; donors D1/D2 are the authors' biological replicates",
+                batch_kind="technical (lane), one lane per donor x condition; the donor is part of the context",
                 modality="CRISPRko (Cas9 RNP electroporation, SLICE; CROP-seq sgRNA capture)", cell_calling="authors (Cell Ranger 2.0 default filter)",
                 guide_assignment="authors' CellBC_sgRNA tables (U6 reamplification reads; cells with more than one assigned guide removed by the authors): "
                                  "one guide per listed barcode, barcodes without a row are unassigned",
@@ -749,4 +713,4 @@ def xatlas_repo(cfg):
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
                                    replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, replogle20,
                                    orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb,
-                                   schmidt22_t_crispra, shifrut18_t_crisprko]}
+                                   shifrut18_t_crisprko]}
