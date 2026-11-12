@@ -1,4 +1,4 @@
-"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Tian 2021, Jiang, McFaline, VIPerturb, KOLF, Feng, McCutcheon, Papalexi, Martin-Rufino HSPC."""
+"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Tian 2021, Jiang, McFaline, VIPerturb, KOLF, Feng, McCutcheon, Papalexi, Martin-Rufino HSPC, Joung."""
 import glob
 import gzip
 import itertools
@@ -17,7 +17,7 @@ import scipy.sparse as sp
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent / "audit"))
 import sources  # noqa: E402
-from adapters import ADAPTERS, CHUNK, Adapter, chunks_of  # noqa: E402
+from adapters import ADAPTERS, CHUNK, Adapter, chunks_of, dense_rows  # noqa: E402
 from config import path  # noqa: E402
 from h5 import col, dec, index, tenx_features  # noqa: E402
 
@@ -544,5 +544,18 @@ class MartinRufinoHSPC(TenxLanes):
             start += x.shape[0]
 
 
-ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, TianCRISPRi, TianCRISPRa, Jiang, McFaline, VIPerturb, Kolf, Feng,
-                                        McCutcheonCRISPRi, McCutcheonCRISPRa, Papalexi, MartinRufinoHSPC]})
+class Joung(Adapter):
+    """Joung 2023 TF Atlas: one dense float32 h5ad (cells x 37,528 symbols), 5,000 rows per chunk."""
+
+    dataset, loader = "joung23_tf_atlas", staticmethod(sources.joung23_tf_atlas)
+
+    def features(self, unit):
+        with h5py.File(sources.joung_atlas(self.acfg), "r") as h:
+            return None, index(h, "var")
+
+    def chunks(self, unit):
+        yield from dense_rows(sources.joung_atlas(self.acfg), 5000)
+
+
+ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, TianCRISPRi, TianCRISPRa, Jiang, McFaline, VIPerturb,
+                                        Kolf, Feng, McCutcheonCRISPRi, McCutcheonCRISPRa, Papalexi, MartinRufinoHSPC, Joung]})

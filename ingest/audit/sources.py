@@ -4,7 +4,9 @@ import gzip
 import io
 import itertools
 import json
+import os
 import re
+import shutil
 import subprocess
 import tarfile
 import zipfile
@@ -1025,6 +1027,51 @@ def martinrufino25_hspc(cfg):
                        "cells of one context span many differentiation states (author_cell_type); the authors compare each cell with nearest-neighbour controls",
                        "Peaks and CRISPR Guide Capture features skipped"])
     return Source("martinrufino25_hspc", obs, meta, names[gex], ids[gex], tenx_values(first, cfg["integer_sample_values"]))
+JOUNG_ATLAS = "GSE217460_210322_TFAtlas_raw.h5ad"
+
+
+def joung_atlas(cfg):
+    """Decompressed TF Atlas h5ad under tmp/, written from the deposit's .gz when absent."""
+    out = Path(cfg["root"]) / "tmp" / "joung23_tf_atlas" / JOUNG_ATLAS
+    if not out.exists():
+        out.parent.mkdir(parents=True, exist_ok=True)
+        part = out.with_name(f".{out.name}.{os.getpid()}.part")
+        with gzip.open(Path(cfg["root"]) / "raw" / "joung23_tf_atlas" / (JOUNG_ATLAS + ".gz"), "rb") as src, open(part, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 24)
+        os.replace(part, out)
+    return out
+
+
+def joung23_tf_atlas(cfg):
+    """Joung 2023 TF Atlas (GEO GSE217460): H1 hESC + barcoded TF ORF library, 7 days in STEMdiff APEL, SHARE-seq RNA."""
+    with h5py.File(joung_atlas(cfg), "r") as h:
+        orf = col(h, "obs/TF").astype(str)
+        n = len(orf)
+        sym = np.array([x.split("-", 1)[1] for x in orf], object)
+        is_ctrl = np.isin(sym, ["GFP", "mCherry"])
+        experiment = pd.Series(col(h, "obs/batch").astype(str))
+        sublibrary = pd.Series(index(h, "obs")).str.extract(r"(P1\.\d+)")[0]
+        obs = frame(n, context="joung23_tf_atlas__H1", cell_type="H1 hESC", condition="STEMdiff_APEL", timepoint="day 7", donor="H1",
+                    batch=(experiment + "_" + sublibrary).to_numpy(), perturbation=np.where(is_ctrl, "", sym),
+                    is_control=is_ctrl, control_kind=np.where(is_ctrl, "non_targeting", None), guide=orf, n_guides=1.0,
+                    total_counts=col(h, "obs/n_counts"), n_genes=col(h, "obs/n_genes"), pct_mito=100 * col(h, "obs/percent_mito"))
+        obs["experiment"] = experiment.to_numpy()
+        genes = index(h, "var")
+        vals = matrix_values(h, "X", cfg["integer_sample_values"])
+        shape = h["X"].shape
+    meta = dict(deposit="GEO GSE217460 GSE217460_210322_TFAtlas_raw.h5ad.gz; the _differentiated_raw.h5ad.gz file is the clusters 6-8 subset of the same cells and is not loaded",
+                files=[str(Path(cfg["root"]) / "raw" / "joung23_tf_atlas" / (JOUNG_ATLAS + ".gz"))],
+                batch_field="obs/batch (experiment 0/1) + P1 index of the cell name (SHARE-seq PCR sub-library, one per anndata concatenation key)",
+                batch_kind="technical (sub-library) within experiment; GFP/mCherry controls only in experiment 1",
+                modality="ORF overexpression (MORF library of 3,548 TF isoforms, lentiviral, MOI <0.3)",
+                cell_calling="authors (SHARE-seq, >700 and <7,000 genes, <5% mitochondrial reads)",
+                guide_assignment="authors' TF barcode call: top barcode with >10 reads and >50% more reads than the second; cells without a mapped ORF excluded, so one ORF per cell",
+                matrix=f"X dense float32 {shape}, integer-valued",
+                gene_ids="symbols only (var index); mitochondrial genes under old symbols (ATP6, ATP8, COX3, CYTB, ND2-ND6; COX1, COX2, ND1 ambiguous)",
+                flags=["GFP and mCherry control ORFs recorded as non_targeting; guide keeps the TFORF id",
+                       "several isoforms of one TF are several guides of one perturbation label",
+                       "percent_mito is a fraction in the deposit (x100 here); the shard's pct_mito misses COX1, COX2 and ND1 and is a lower bound"])
+    return Source("joung23_tf_atlas", obs, meta, genes, None, vals)
 
 
 def xatlas_repo(cfg):
@@ -1049,9 +1096,13 @@ def xatlas_repo(cfg):
 
 
 
+
+
+
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman,
                                    scperturb_wessels, replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2,
                                    nadig25_jurkat, replogle20, orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc,
                                    cd4t, jiang, mcfaline, viperturb, shifrut18_t_crisprko, mccutcheon23_cd8t_crispri,
                                    mccutcheon23_cd8t_crispra, tian21_neurons_crispri, tian21_neurons_crispra, papalexi21_thp1,
-                                   martinrufino25_hspc, adamson16_other_lanes, wessels23_hek293ft, wessels23_perturbseq]}
+                                   martinrufino25_hspc, adamson16_other_lanes, wessels23_hek293ft, wessels23_perturbseq,
+                                   joung23_tf_atlas]}

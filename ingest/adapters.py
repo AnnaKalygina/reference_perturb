@@ -38,6 +38,17 @@ def chunks_of(m):
         yield s, m[s:s + CHUNK]
 
 
+def dense_rows(path, rows=CHUNK):
+    """Yield (start, csr chunk) over the rows of a dense integer-valued float h5ad X, `rows` rows at a time."""
+    with h5py.File(path, "r") as h:
+        x = h["X"]
+        for s in range(0, x.shape[0], rows):
+            block = np.asarray(x[s:s + rows])
+            if not np.array_equal(block, np.rint(block)):
+                raise SystemExit(f"{path}: non-integer values in rows {s}:{s + rows}")
+            yield s, sp.csr_matrix(block.astype(np.int32))
+
+
 class Adapter:
     """Base: one dataset, units that each feed one or more contexts."""
 
@@ -128,13 +139,7 @@ class ReplogleRows(Adapter):
             return ids, names
 
     def chunks(self, unit):
-        with h5py.File(self.path(), "r") as h:
-            x = h["X"]
-            for s in range(0, x.shape[0], CHUNK):
-                block = np.asarray(x[s:s + CHUNK])
-                if not np.array_equal(block, np.rint(block)):
-                    raise SystemExit(f"{self.path()}: non-integer values in rows {s}:{s + CHUNK}")
-                yield s, sp.csr_matrix(block.astype(np.int32))
+        yield from dense_rows(self.path())
 
 
 class ReplogleK562(ReplogleRows):

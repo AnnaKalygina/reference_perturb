@@ -88,6 +88,7 @@ cell_rules:
     wessels23_hek293ft: Wessels et al. 2023 Nat Methods, cells without a bcgRNA and cells with multiple bcgRNA assignments removed (CaRPool-seq MultiSeqDemux; stabRNA g1/g2 UMI rule); only assigned cells deposited
     wessels23_perturbseq: Wessels et al. 2023 Nat Methods, HTODemux doublets removed and only cells with the sgRNA number and combination of their pool retained; only those cells deposited
     adamson16_other_lanes: Adamson et al. 2016 Cell, one good-coverage guide barcode identity assigned, two or more a multiple, none unidentifiable
+    joung23_tf_atlas: Joung et al. 2023 Cell, STAR Methods "SHARE-seq data preprocessing", one TF ORF per cell (top barcode with >10 reads and >50% more reads than the second); cells without a mapped ORF excluded by the authors
 
 shard:
   bucket_rows: 65536
