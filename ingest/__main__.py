@@ -142,6 +142,7 @@ def submit(cfg, stage, datasets, dependency=None):
         from adapters import ADAPTERS
         import adapters_more  # noqa: F401
         import adapters_cd4t  # noqa: F401
+        import adapters_tcells  # noqa: F401
         for d in datasets or ADAPTERS:
             if d in ADAPTERS:
                 units += [(d, u) for u in ADAPTERS[d](cfg).units()]

@@ -78,6 +78,7 @@ cell_rules:
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
     dld1: Yeung et al. 2026, low-MOI singlets are the reference
+    shifrut18_t_crisprko: Shifrut et al. 2018 Cell, cells with more than one assigned guide filtered out; the deposited calls list one guide per cell
 
 shard:
   bucket_rows: 65536
