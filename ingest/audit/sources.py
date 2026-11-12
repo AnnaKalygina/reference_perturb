@@ -188,26 +188,29 @@ def scperturb_sunshine(cfg):
 
 
 def scperturb_norman(cfg):
-    """scPerturb NormanWeissman2019_filtered (repo only)."""
+    """scPerturb NormanWeissman2019_filtered (repo only); cells assigned by the authors' single-identity rule."""
     p = Path(cfg["repo_data"]) / "norman19/norman19_downloaded.h5ad"
     with h5py.File(p, "r") as h:
         pert = pd.Series(col(h, "obs/perturbation"), dtype="object").fillna("")
         n = len(pert)
-        is_ctrl = (pert == "control").to_numpy()
+        identities = col(h, "obs/number_of_cells")
+        one = (identities == 1) & col(h, "obs/good_coverage").astype(bool)
+        is_ctrl = one & (pert == "control").to_numpy()
         lab = np.array([join_targets(x.split("_")) if x and x != "control" else "" for x in pert], object)
         obs = frame(n, context="norman19__K562", cell_type="K562", condition="unstimulated", donor="K562",
-                    batch=col(h, "obs/gemgroup").astype(str), perturbation=lab, is_control=is_ctrl,
+                    batch=col(h, "obs/gemgroup").astype(str), perturbation=np.where(one, lab, ""), is_control=is_ctrl,
                     control_kind=np.where(is_ctrl, "non_targeting", None), guide=col(h, "obs/guide_id"),
-                    n_guides=col(h, "obs/nperts"), total_counts=col(h, "obs/ncounts"), n_genes=col(h, "obs/ngenes"),
+                    n_guides=identities, total_counts=col(h, "obs/ncounts"), n_genes=col(h, "obs/ngenes"),
                     pct_mito=col(h, "obs/percent_mito"))
         genes, ens = index(h, "var"), col(h, "var/ensemble_id")
         vals = matrix_values(h, "X", cfg["integer_sample_values"])
     meta = dict(deposit="Zenodo 7041849 NormanWeissman2019_filtered.h5ad (scPerturb); GEO GSE133344",
                 files=[str(p)], batch_field="obs/gemgroup (10x GEM group)", batch_kind="technical",
-                modality="CRISPRa single + dual", cell_calling="authors",
-                guide_assignment="authors' guide_id; NegCtrl guides; combos 'A_B'",
+                modality="CRISPRa single + dual", cell_calling="authors (cell barcodes with > 2000 UMIs)",
+                guide_assignment="authors' cell_identities (obs number_of_cells, good_coverage): one good-coverage identity assigned, two or more a multiple, none unidentifiable; NegCtrl guides; combos 'A_B'",
                 matrix="X csc float32 integer-valued", gene_ids="symbols + ensemble_id",
-                flags=["Norman 2019 is CRISPRa (not CRISPRi as the repo catalog says)"])
+                flags=["Norman 2019 is CRISPRa (not CRISPRi as the repo catalog says)",
+                       "harvest day: 7 post-transduction in the preprint (bioRxiv 10.1101/601096v1), 5 on GEO GSE133344 (sorted at day 3, grown 2 more days)"])
     return Source("norman19", obs, meta, genes, ens, vals)
 
 

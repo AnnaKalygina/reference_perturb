@@ -74,6 +74,7 @@ cell_rules:
     default: every checked paper except Feng excludes guide-less cells and treats undesigned multi-guide cells as doublets; Anna 2026-11-04
     scperturb_sunshine: high-MOI multi-target design kept as combinations with n_targets (reference_dataset.md section 9; Anna 2026-11-04 review)
     scperturb_frangieh: multi-guide cells dropped (Anna 2026-11-04 evening)
+    scperturb_norman: Norman et al. 2019 Science, only cell barcodes bearing an unambiguous unique perturbation barcode count as cells (no doublets or multiple lentiviral integrations); deposit number_of_cells == 1 with good_coverage assigned, two or more a multiple, none unidentifiable
     hesc: Pan et al. 2026, exactly one sgRNA with at least 20 barcode counts
     cd4t: Zhu et al. 2026 Cell, multi_sgRNA and no-gRNA cells excluded
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
