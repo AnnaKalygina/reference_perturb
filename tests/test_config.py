@@ -23,7 +23,7 @@ def write_config(tmp, edit):
 
 
 def test_hash_ignores_slurm_and_reader(tmp_path, monkeypatch):
-    for name in config.HASHED_TABLES:
+    for name in config.HASHED_TABLES + ["deposits.yaml"]:
         shutil.copy(ROOT / "config" / name, tmp_path / name)
     monkeypatch.setattr(config, "CONFIG", tmp_path)
     write_config(tmp_path, lambda cfg: None)
