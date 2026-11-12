@@ -2,7 +2,6 @@
 import glob
 import gzip
 import io
-import itertools
 import json
 import os
 import re
@@ -65,47 +64,29 @@ def tar_table(tar, member, **kw):
         return pd.read_csv(t.extractfile(member), compression="gzip", **kw)
 
 
-def mtx_values(tar, member, n):
-    """The first n stored values of a gzipped matrix.mtx member."""
-    with tarfile.open(tar) as t, gzip.open(t.extractfile(member), "rt") as fh:
-        body = (line for line in fh if not line.startswith("%"))
-        return np.array([line.split()[2] for line in itertools.islice(body, 1, n + 1)], float)
+def mtx_values(fh, n):
+    """The first n stored values of a MatrixMarket byte stream."""
+    line = fh.readline()
+    while line.startswith(b"%"):
+        line = fh.readline()
+    return np.array([float(fh.readline().split()[2]) for _ in range(n)])
 
 
-def scperturb_adamson(cfg):
-    """scPerturb AdamsonWeissman2016 GSM2406681 (10X010), identical file in repo and VCC2026."""
-    p = Path(cfg["vcc_data"]) / "raw/scperturb/AdamsonWeissman2016_GSM2406681_10X010.h5ad"
-    with h5py.File(p, "r") as h:
-        pert = col(h, "obs/perturbation")
-        n = len(pert)
-        s = pd.Series(pert, dtype="object").fillna("")
-        is_ctrl = s.str.contains(r"\(", regex=True).to_numpy()
-        lab = s.str.split("_").str[0].to_numpy()
-        obs = frame(n, context="adamson16__K562", cell_type="K562", condition="unstimulated", donor="K562",
-                    batch="10X010", perturbation=lab, is_control=is_ctrl,
-                    control_kind=np.where(is_ctrl, "non_targeting", None), guide=s.to_numpy(),
-                    n_guides=col(h, "obs/nperts"), total_counts=col(h, "obs/ncounts"), n_genes=col(h, "obs/ngenes"),
-                    pct_mito=col(h, "obs/percent_mito"))
-        genes, ens = col(h, "var/gene_symbol"), col(h, "var/ensembl_id")
-        vals = matrix_values(h, "X", cfg["integer_sample_values"])
-    meta = dict(deposit="Zenodo 7416068/10044268 AdamsonWeissman2016_GSM2406681_10X010.h5ad (scPerturb); GEO GSM2406681",
-                files=[str(p), str(Path(cfg["repo_data"]) / "adamson16/adamson16_downloaded.h5ad")],
-                batch_field="none (single 10x lane GSM2406681 / 10X010)", batch_kind="none",
-                modality="CRISPRi", cell_calling="authors (Cell Ranger, scPerturb copy)",
-                guide_assignment="authors' perturbation label; nperts counts guide+plasmid; unassigned cells have no label",
-                matrix="X csc float32 integer-valued", gene_ids="symbols + ensembl_id (Ensembl release not stated)",
-                flags=["only GSM2406681 of the Adamson study; other experiments (GSM2406675/77) not in scPerturb file"])
-    return Source("adamson16", obs, meta, genes, ens, vals)
+def mtx_member_values(tar, member, n):
+    """The first n stored values of a gzipped matrix.mtx member of a tar."""
+    with tarfile.open(tar) as t, gzip.open(t.extractfile(member)) as fh:
+        return mtx_values(fh, n)
 
 
 ADAMSON_RUNS = {"GSM2406675_10X001": (1, "day 8", {"1": ("adamson16__K562__pilot", "unstimulated")}),
                 "GSM2406677_10X005": (3, "day 5", {"1": ("adamson16__K562__epistasis__tunicamycin_6h", "tunicamycin_6h"),
                                                    "2": ("adamson16__K562__epistasis__thapsigargin_4h", "thapsigargin_4h"),
-                                                   "3": ("adamson16__K562__epistasis__DMSO_6h", "DMSO_6h")})}
+                                                   "3": ("adamson16__K562__epistasis__DMSO_6h", "DMSO_6h")}),
+                "GSM2406681_10X010": (1, "day 7", {str(g): ("adamson16__K562", "unstimulated") for g in range(1, 11)})}
 
 
-def adamson16_other_lanes(cfg):
-    """GEO GSE90546_RAW.tar: the pilot (10X001, one-guide vectors) and UPR epistasis (10X005, three-guide vectors, one GEM group per drug) experiments."""
+def adamson16(cfg):
+    """GEO GSE90546_RAW.tar: the pilot (10X001, one-guide vectors), UPR epistasis (10X005, three-guide vectors, one GEM group per drug) and UPR Perturb-seq (10X010, ten GEM groups) experiments."""
     tar = Path(cfg["root"]) / "raw/adamson16_other_lanes/GSE90546_RAW.tar"
     parts = []
     for run, (guides_per_vector, day, contexts) in ADAMSON_RUNS.items():
@@ -123,16 +104,18 @@ def adamson16_other_lanes(cfg):
         parts[-1]["guide_umi"], parts[-1]["barcode"], parts[-1]["gsm"] = ci["UMI count"].to_numpy(), bc.to_numpy(), run
     obs = pd.concat(parts, ignore_index=True)
     g = tar_table(tar, "GSM2406677_10X005_genes.tsv.gz", sep="\t", header=None, names=["id", "name"])
-    meta = dict(deposit="GEO GSE90546_RAW.tar: GSM2406675 (10X001) and GSM2406677 (10X005) matrix.mtx.txt + barcodes + genes + cell_identities.csv",
-                files=[str(tar)], batch_field="barcode suffix = GEM group (10X001 one; 10X005 three, one per drug treatment, so one batch per context)",
+    meta = dict(deposit="GEO GSE90546_RAW.tar: GSM2406675 (10X001), GSM2406677 (10X005) and GSM2406681 (10X010) matrix.mtx.txt + barcodes + genes + cell_identities.csv",
+                files=[str(tar)], batch_field="barcode suffix = GEM group (10X001 one; 10X005 three, one per drug treatment, so one batch per context; 10X010 ten lanes of one context)",
                 batch_kind="technical", modality="CRISPRi (dCas9-KRAB; 10X005 three-guide vectors)", cell_calling="authors (Cell Ranger 1.0/1.1 barcodes)",
-                guide_assignment="authors' cell_identities: good coverage and number of cells == 1 assigned, >= 2 multiple, 0 or '*' unidentifiable",
-                matrix="matrix.mtx.txt.gz (10X001 integer, 10X005 real-typed, integer-valued)",
-                gene_ids="genes.tsv Ensembl ids + symbols (10X001 35,635 features, Cell Ranger 1.0; 10X005 32,738 as 10X010)",
-                flags=["GSM2406681 (10X010) in the same tar is the reference's scperturb_adamson context",
+                guide_assignment="authors' cell_identities: good coverage and number of cells == 1 assigned, >= 2 multiple, 0 or '*' unidentifiable; "
+                                 "10X010 controls 63(mod)_pBA580 (NegCtrl-2) and Gal4-4(mod)_pBA582 (NegCtrl-3), both non_targeting here, the authors normalized against NegCtrl-2 only",
+                matrix="matrix.mtx.txt.gz (10X001 integer, 10X005 and 10X010 real-typed, integer-valued)",
+                gene_ids="genes.tsv Ensembl ids + symbols (10X001 35,635 features, Cell Ranger 1.0; 10X005 and 10X010 32,738)",
+                flags=["the authors normalized the UPR Perturb-seq experiment (10X010) against NegCtrl-2 (63(mod)_pBA580) cells per lane only; NegCtrl-3 (Gal4-4(mod)_pBA582) is kept as a second non_targeting control",
+                       "80 10X010 matrix barcodes have no identity row and are unidentifiable",
                        "22 10X005 identity rows name guides of other vectors (PSMD12_pDS009 etc.), none with good coverage, so all are unidentifiable",
                        "44 10X005 identity rows have no matrix barcode", "the 10X001 matrix has no counts on its 13 MT- features (pct_mito 0 for every cell)"])
-    return Source("adamson16_other_lanes", obs, meta, g.name.to_numpy(), g.id.to_numpy(), mtx_values(tar, "GSM2406677_10X005_matrix.mtx.txt.gz", cfg["integer_sample_values"]))
+    return Source("adamson16", obs, meta, g.name.to_numpy(), g.id.to_numpy(), mtx_member_values(tar, "GSM2406677_10X005_matrix.mtx.txt.gz", cfg["integer_sample_values"]))
 
 
 FRANGIEH_CTRL = ("NO_SITE", "ONE_NON-GENE_SITE")
@@ -288,7 +271,7 @@ def wessels23_hek293ft(cfg):
                        "stabRNA lane matrices carry 8 transgene features (eGFP, Blast, Cas9, Puro, Cas13d, AsCas12a, MeCP2, KRAB) absent from the CaRPool-seq lane",
                        "the meaning of hash.ID HTO-01..08 within the CaRPool-seq lane is not stated in the paper; every array is in every HTO"])
     return Source("wessels23_hek293ft", obs, meta, hg.name.str[5:].to_numpy(), hg.id.str[5:].to_numpy(),
-                  mtx_values(d / WESSELS_TARS["carpool"], "HEK293FT_and_SpeciesMixing_CaRPool-seq.GEXGDO.matrix.mtx.gz", cfg["integer_sample_values"]))
+                  mtx_member_values(d / WESSELS_TARS["carpool"], "HEK293FT_and_SpeciesMixing_CaRPool-seq.GEXGDO.matrix.mtx.gz", cfg["integer_sample_values"]))
 
 
 def wessels23_perturbseq(cfg):
@@ -316,7 +299,7 @@ def wessels23_perturbseq(cfg):
                 matrix="matrix.mtx.gz integer, features x barcodes", gene_ids="Cell Ranger hg38 (Ensembl 97) ids + symbols, 8 transgene features",
                 flags=["the metadata carries no per-cell counts (total_counts, n_genes, pct_mito NA)",
                        "target Ensembl ids from GDO.feature_ref (CD71 = TFRC ENSG00000072274)"])
-    return Source("wessels23_perturbseq", obs, meta, gex.name.to_numpy(), gex.id.to_numpy(), mtx_values(tar, "Perturb-seq.GEXGDO.matrix.mtx.gz", cfg["integer_sample_values"]))
+    return Source("wessels23_perturbseq", obs, meta, gex.name.to_numpy(), gex.id.to_numpy(), mtx_member_values(tar, "Perturb-seq.GEXGDO.matrix.mtx.gz", cfg["integer_sample_values"]))
 
 
 def replogle_rows(cfg, name, path, cell_type, deposit, timepoint, extra_flags=()):
@@ -810,14 +793,6 @@ def viperturb(cfg):
     return Source("viperturb", obs, meta, None, None, vals)
 
 
-def mtx_values(fh, n):
-    """The first n stored values of a MatrixMarket byte stream."""
-    line = fh.readline()
-    while line.startswith(b"%"):
-        line = fh.readline()
-    return np.array([float(fh.readline().split()[2]) for _ in range(n)])
-
-
 SHIFRUT_SAMPLES = {"D1N": ("D1", "NoStim"), "D1S": ("D1", "Stim"), "D2N": ("D2", "NoStim"), "D2S": ("D2", "Stim")}
 
 
@@ -1101,10 +1076,10 @@ def xatlas_repo(cfg):
 
 
 
-SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman,
+SOURCES = {f.__name__: f for f in [scperturb_frangieh, scperturb_sunshine, scperturb_norman,
                                    scperturb_wessels, replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2,
                                    nadig25_jurkat, replogle20, orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc,
                                    cd4t, jiang, mcfaline, viperturb, shifrut18_t_crisprko, mccutcheon23_cd8t_crispri,
                                    mccutcheon23_cd8t_crispra, tian21_neurons_crispri, tian21_neurons_crispra, papalexi21_thp1,
-                                   martinrufino25_hspc, adamson16_other_lanes, wessels23_hek293ft, wessels23_perturbseq,
+                                   martinrufino25_hspc, adamson16, wessels23_hek293ft, wessels23_perturbseq,
                                    joung23_tf_atlas]}

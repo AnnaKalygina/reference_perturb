@@ -17,7 +17,7 @@ VCC = Path(CFG["vcc_data"])
 JPW = {"IFNB": "ifnb", "IFNG": "ifng", "INS": "ins", "TGFB1": "tgfb", "TNFA": "tnfa"}
 
 PAIRS = [
-    ("scperturb_adamson", "adamson16", lambda o: "adamson16__K562", lambda c: "adamson__k562"),
+    ("adamson16", "adamson16", lambda o: "adamson16__K562", lambda c: "adamson__k562" if c == "adamson16__K562" else None),
     ("scperturb_frangieh", "frangieh21",
      lambda o: "frangieh21__melanoma__" + o["perturbation_2"].map({"Control": "control", "IFNγ": "IFNG", "Co-culture": "TIL_coculture"}),
      lambda c: {"control": "frangieh__control", "IFNG": "frangieh__ifng", "TIL_coculture": "frangieh__coculture"}[c.split("__")[-1]]),
