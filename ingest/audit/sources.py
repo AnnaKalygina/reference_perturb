@@ -1,6 +1,7 @@
 """One read-only loader per deposit: standardized per-cell obs plus deposit metadata."""
 import glob
 import gzip
+import io
 import json
 import re
 import subprocess
@@ -692,6 +693,91 @@ def shifrut18_t_crisprko(cfg):
                        "the paper also keeps only cells with more than 500 genes (qc_genes_500 flag, not applied)",
                        "about a third of the guide-table barcodes are absent from the Cell Ranger filtered matrices"])
     return Source("shifrut18_t_crisprko", obs, meta, genes.name.to_numpy(), genes.id.to_numpy(), vals)
+MCCUTCHEON_LANES = {"crispri": ["GSM6761464_CRISPRi_D1", "GSM6761465_CRISPRi_D2", "GSM6761466_CRISPRi_D3"],
+                    "crispra": ["GSM6761467_CRISPRa_D1", "GSM6761468_CRISPRa_D2", "GSM6761469_CRISPRa_D3"]}
+
+
+def mtx_entries(fh, chunk=20000000):
+    """(n_features, n_cells, chunks) of a gzipped MatrixMarket coordinate file; chunks are 0-based int32 (feature, cell, count) arrays."""
+    g = gzip.GzipFile(fileobj=fh)
+    line = g.readline()
+    while line.startswith(b"%"):
+        line = g.readline()
+    nf, nc, _ = (int(v) for v in line.split())
+    chunks = ((t.r.to_numpy() - 1, t.c.to_numpy() - 1, t.v.to_numpy())
+              for t in pd.read_csv(g, sep=" ", header=None, names=["r", "c", "v"], dtype=np.int32, chunksize=chunk))
+    return nf, nc, chunks
+
+
+def mccutcheon_lanes(root, arm):
+    """Yield (lane, barcodes, features, mtx entries) per donor lane of one arm, read from the nested GEO tar without extraction."""
+    with tarfile.open(Path(root) / "raw/mccutcheon23_cd8t/GSE218988_RAW.tar") as outer:
+        for lane in MCCUTCHEON_LANES[arm]:
+            with tarfile.open(fileobj=outer.extractfile(f"{lane}.tar.gz"), mode="r|gz") as inner:
+                files = {Path(m.name).name: inner.extractfile(m).read() for m in inner}
+            barcodes = np.array(gzip.decompress(files["barcodes.tsv.gz"]).decode().split(), dtype=object)
+            features = pd.read_csv(io.BytesIO(files["features.tsv.gz"]), sep="\t", header=None, names=["id", "name", "type"], compression="gzip")
+            yield lane, barcodes, features, mtx_entries(io.BytesIO(files["matrix.mtx.gz"]))
+
+
+def mccutcheon(cfg, arm):
+    """McCutcheon 2023 CD8 T mini-TF Perturb-seq, one arm (GSE218988): Cell Ranger lanes per donor; gRNA calls by the paper's rule (no calls deposited)."""
+    name = f"mccutcheon23_cd8t_{arm}"
+    min_umi = cfg["mccutcheon_guide_min_umi"]
+    parts, vals = [], None
+    for lane, barcodes, features, (nf, nc, chunks) in mccutcheon_lanes(cfg["root"], arm):
+        is_g = (features.type == "CRISPR Guide Capture").to_numpy()
+        gcol = np.full(nf, -1)
+        gcol[is_g] = np.arange(is_g.sum())
+        umi = np.zeros((nc, int(is_g.sum())), np.int64)
+        tot, ngen = np.zeros(nc, np.int64), np.zeros(nc, np.int64)
+        for r, c, v in chunks:
+            if vals is None:
+                vals = v[: cfg["integer_sample_values"]].astype(float)
+            g = gcol[r]
+            sel = g >= 0
+            np.add.at(umi, (c[sel], g[sel]), v[sel])
+            tot += np.bincount(c[~sel], weights=v[~sel], minlength=nc).astype(np.int64)
+            ngen += np.bincount(c[~sel], minlength=nc)
+        gnames = features.name[is_g].to_numpy()
+        tg = np.array(["non-targeting" if x.startswith("NT_") else x.rsplit("_", 1)[0] for x in gnames], object)
+        called = umi >= min_umi
+        nguide = called.sum(1)
+        ok = nguide == 1
+        best = np.where(ok, tg[umi.argmax(1)], "")
+        is_ctrl = ok & (best == "non-targeting")
+        donor = lane.rsplit("_", 1)[1]
+        parts.append(frame(nc, context=ctx(name, donor), cell_type="primary CD8+ T", condition="CD3_CD28_activated", timepoint="day 10",
+                           donor=donor, batch=lane, perturbation=np.where(ok & ~is_ctrl, best, ""), is_control=is_ctrl,
+                           control_kind=np.where(is_ctrl, "non_targeting", None),
+                           guide=np.array([";".join(gnames[row]) if row.any() else None for row in called], object),
+                           n_guides=nguide, total_counts=tot, n_genes=ngen))
+        parts[-1]["guide_umi"] = umi.max(1)
+        parts[-1]["barcode"] = barcodes
+        parts[-1]["assigned_by"] = f"paper rule computed here: gRNA UMI >= {min_umi}"
+        if len(parts) == 1:
+            genes, ens = features.name[~is_g].to_numpy(), features.id[~is_g].to_numpy()
+    obs = pd.concat(parts, ignore_index=True)
+    cas = {"crispri": "CRISPRi (dSaCas9-KRAB, all-in-one lentivirus, Thy1.1-sorted)", "crispra": "CRISPRa (VP64-dSaCas9-VP64, all-in-one lentivirus, Thy1.1-sorted)"}
+    meta = dict(deposit=f"GEO GSE218988 (SubSeries GSE218985) GSE218988_RAW.tar: {', '.join(MCCUTCHEON_LANES[arm])}.tar.gz, Cell Ranger 6.0.1 filtered barcodes/features/matrix.mtx",
+                files=[str(Path(cfg["root"]) / "raw/mccutcheon23_cd8t")],
+                batch_field="GEO sample = one 10x 5' HT v2 lane per donor and arm; donors are separate contexts", batch_kind="technical (one lane per donor)",
+                modality=cas[arm], cell_calling="Cell Ranger 6.0.1 filtered barcodes (authors); the paper's QC (<200 genes, >20% mito, <5% ribosomal, DoubletFinder) not applied",
+                guide_assignment=f"NOT deposited as calls: computed per gRNA from the 40 CRISPR Guide Capture features as in the paper's methods (gRNA UMI > 4, i.e. >= {min_umi}); "
+                                 "cells with exactly one called gRNA are assigned; controls are cells whose single called gRNA is NT",
+                matrix="matrix.mtx.gz integer, 36,601 Gene Expression + 40 CRISPR Guide Capture features", gene_ids="Cell Ranger GRCh38 Ensembl ids + symbols",
+                flags=[f"gRNA capture is shallow: {int((obs.n_guides == 0).sum())} of {len(obs)} cells have no gRNA at >= {min_umi} UMI, {int((obs.n_guides > 1).sum())} have several",
+                       "the paper pools donors per arm and compares each gRNA's cells with cells carrying only NT gRNAs; here each donor is a context",
+                       "32 targeting gRNAs over 24 genes (several gRNAs per gene) + 8 NT gRNAs"])
+    return Source(name, obs, meta, genes, ens, vals)
+
+
+def mccutcheon23_cd8t_crispri(cfg):
+    return mccutcheon(cfg, "crispri")
+
+
+def mccutcheon23_cd8t_crispra(cfg):
+    return mccutcheon(cfg, "crispra")
 
 
 def xatlas_repo(cfg):
@@ -710,7 +796,8 @@ def xatlas_repo(cfg):
     return Source("xatlas_orion_repo", obs, meta, None, None, vals)
 
 
-SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman, scperturb_wessels,
-                                   replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2, nadig25_jurkat, replogle20,
-                                   orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc, cd4t, jiang, mcfaline, viperturb,
-                                   shifrut18_t_crisprko]}
+SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman,
+                                   scperturb_wessels, replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2,
+                                   nadig25_jurkat, replogle20, orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc,
+                                   cd4t, jiang, mcfaline, viperturb, shifrut18_t_crisprko, mccutcheon23_cd8t_crispri,
+                                   mccutcheon23_cd8t_crispra]}

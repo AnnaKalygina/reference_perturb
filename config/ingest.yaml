@@ -55,10 +55,11 @@ controls:
   including_unassigned: [feng]
 
 hesc_guide_min_umi: 20
+mccutcheon_guide_min_umi: 5
 
 perturbation_direction:
   default: down
-  up: [scperturb_norman, joung23_tf_atlas]
+  up: [scperturb_norman, joung23_tf_atlas, mccutcheon23_cd8t_crispra]
 
 cell_rules:
   default:
@@ -79,6 +80,8 @@ cell_rules:
     feng: Feng et al. 2026 Cell Genomics, unassigned + non-targeting cells are the control set
     dld1: Yeung et al. 2026, low-MOI singlets are the reference
     shifrut18_t_crisprko: Shifrut et al. 2018 Cell, cells with more than one assigned guide filtered out; the deposited calls list one guide per cell
+    mccutcheon23_cd8t_crispri: McCutcheon et al. 2023 Nat Genet Methods, gRNAs assigned at gRNA UMI > 4 and cells grouped by gRNA identity (guide-less cells in no group, controls are cells with only NT gRNAs); the paper does not exclude multi-gRNA cells, the default rule drops them
+    mccutcheon23_cd8t_crispra: McCutcheon et al. 2023 Nat Genet Methods, same rule as mccutcheon23_cd8t_crispri
 
 shard:
   bucket_rows: 65536

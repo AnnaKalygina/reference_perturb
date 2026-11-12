@@ -1,4 +1,4 @@
-"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng."""
+"""Adapters for the multi-file and gene-major deposits: H1, Orion, DLD-1, hESC, Jiang, McFaline, VIPerturb, KOLF, Feng, McCutcheon."""
 import glob
 import gzip
 import itertools
@@ -399,4 +399,42 @@ class Feng(GeneMajor):
                 g += len(rows)
 
 
-ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng]})
+class McCutcheon(Adapter):
+    """McCutcheon 2023 CD8 T, one arm: three Cell Ranger mtx lanes read from the nested GEO tar, gene-expression features only."""
+
+    arm = None
+
+    def lanes(self):
+        return sources.mccutcheon_lanes(self.cfg["root"], self.arm)
+
+    def features(self, unit):
+        _, _, features, _ = next(self.lanes())
+        gex = features[features.type == "Gene Expression"]
+        return gex.id.to_numpy(), gex.name.to_numpy()
+
+    def chunks(self, unit):
+        ref = self.features(unit)[0]
+        start = 0
+        for lane, _, features, (nf, nc, entries) in self.lanes():
+            gex = (features.type == "Gene Expression").to_numpy()
+            if not np.array_equal(features.id.to_numpy()[gex], ref):
+                raise SystemExit(f"{lane}: gene set differs from the first lane")
+            col_of = np.full(nf, -1)
+            col_of[gex] = np.arange(gex.sum())
+            r, c, v = (np.concatenate(a) for a in zip(*entries))
+            keep = col_of[r] >= 0
+            m = sp.csr_matrix((v[keep], (c[keep], col_of[r[keep]])), shape=(nc, int(gex.sum())))
+            for lo, piece in chunks_of(m):
+                yield start + lo, piece
+            start += nc
+
+
+class McCutcheonCRISPRi(McCutcheon):
+    dataset, loader, arm = "mccutcheon23_cd8t_crispri", staticmethod(sources.mccutcheon23_cd8t_crispri), "crispri"
+
+
+class McCutcheonCRISPRa(McCutcheon):
+    dataset, loader, arm = "mccutcheon23_cd8t_crispra", staticmethod(sources.mccutcheon23_cd8t_crispra), "crispra"
+
+
+ADAPTERS.update({a.dataset: a for a in [H1, OrionHCT116, OrionHEK293T, DLD1, HESC, Jiang, McFaline, VIPerturb, Kolf, Feng, McCutcheonCRISPRi, McCutcheonCRISPRa]})
