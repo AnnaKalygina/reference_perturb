@@ -15,8 +15,7 @@ sys.path.insert(0, str(ROOT / "ingest" / "audit"))
 import toy  # noqa: E402
 
 
-@pytest.fixture(scope="module")
-def built(tmp_path_factory, monkeypatch_module=None):
+def build(tmp, shallow=()):
     """Run the three stages on the toy context inside a temporary root."""
     import config
     import adapters
@@ -24,11 +23,11 @@ def built(tmp_path_factory, monkeypatch_module=None):
     import moments
     import deltas
 
-    tmp = toy.make_root(tmp_path_factory.mktemp("root"))
+    tmp = toy.make_root(tmp)
     config.ROOT, config.CONFIG = tmp, tmp / "config"
     cfg = config.load()
     rng = np.random.default_rng(1)
-    obs, counts = toy.build_cells(rng)
+    obs, counts = toy.build_cells(rng, shallow)
     adapters.ADAPTERS["toy"] = lambda cfg: toy.ToyAdapter(cfg, obs, counts)
     import gene_axis
     gene_axis.TABLE = tmp / "config" / "genes_ensembl112.tsv.gz"
@@ -39,6 +38,16 @@ def built(tmp_path_factory, monkeypatch_module=None):
     sys.path.insert(0, str(ROOT))
     from reference_perturb import Reference
     return dict(root=tmp, cfg=cfg, obs=obs, counts=counts, R=Reference(tmp))
+
+
+@pytest.fixture(scope="module")
+def built(tmp_path_factory):
+    return build(tmp_path_factory.mktemp("root"))
+
+
+@pytest.fixture(scope="module")
+def built_shallow(tmp_path_factory):
+    return build(tmp_path_factory.mktemp("root_shallow"), shallow=("b2",))
 
 
 def test_row_order_and_values(built):
@@ -137,3 +146,29 @@ def test_variance_matches_numpy(built):
     xc = np.log1p(1e4 * cells.toarray() / L[:, None])
     i = list(pix.perturbation).index("TOYG01")
     assert np.allclose(m["var_C"][i], xc.var(0, ddof=1), atol=1e-12)
+
+
+def test_scores_without_predicted_doublet(built):
+    assert built["R"].scores("toy__ctx") is None
+
+
+def test_batch_qc_shape(built):
+    q = built["R"].batch_qc("toy__ctx")
+    assert q.batch.tolist() == ["b1", "b2", "b3"]
+    assert q.cells.tolist() == [16, 9, 29] and q.controls_used.tolist() == [6, 4, 10]
+    assert q.columns.tolist() == ["batch", "cells", "controls_used", "lib_size_median", "n_genes_median", "pct_mito_median", "qc_strict_share", "doublet_score_median",
+                                  "control_shift", "depth_low", "control_shift_high"]
+    assert q.control_shift.notna().all() and not q.depth_low.any()
+
+
+def test_batch_qc_flags_shallow_batch(built_shallow):
+    q = built_shallow["R"].batch_qc("toy__ctx").set_index("batch")
+    assert q.depth_low.tolist() == [False, True, False]
+    assert q.loc["b2", "lib_size_median"] < 0.5 * q.lib_size_median.median()
+
+
+def test_batch_effect_size(built):
+    e = built["R"].batch_effect_size("toy__ctx")
+    assert set(e) == {"batch_offset_scale", "perturbation_effect_scale", "ratio"}
+    assert e["batch_offset_scale"] > 0 and e["perturbation_effect_scale"] > 0
+    assert np.isclose(e["ratio"], e["batch_offset_scale"] / e["perturbation_effect_scale"])

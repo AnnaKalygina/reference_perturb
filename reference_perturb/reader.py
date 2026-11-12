@@ -1,4 +1,4 @@
-"""The one consumer entry point: moments, deltas (δ^A, δ^C stored; Δ^B, δ^B derived), cells, masks and scores of a context."""
+"""The one consumer entry point: moments, deltas (δ^A, δ^C stored; Δ^B, δ^B derived), cells, masks, scores and batch QC of a context."""
 from pathlib import Path
 
 import h5py
@@ -32,8 +32,8 @@ class Reference:
     def shard(self, context):
         return self.root / "shards" / self.dataset(context) / f"{context}.h5ad"
 
-    def obs(self, context):
-        return pd.read_parquet(self.shard(context).with_name(f"{context}.obs.parquet"))
+    def obs(self, context, columns=None):
+        return pd.read_parquet(self.shard(context).with_name(f"{context}.obs.parquet"), columns=columns)
 
     def blocks(self, context):
         return pd.read_parquet(self.shard(context).with_name(f"{context}.blocks.parquet"))
@@ -65,8 +65,12 @@ class Reference:
     def suffstats_dir(self, context):
         return self.root / "suffstats" / self.dataset(context) / context
 
-    def index(self, context):
-        return pd.read_parquet(self.suffstats_dir(context) / "index.parquet")
+    def index(self, context, table=None, profile="authors", half="all"):
+        """index.parquet, or its rows of one table, profile and half in stored row order."""
+        ix = pd.read_parquet(self.suffstats_dir(context) / "index.parquet")
+        if table is None:
+            return ix
+        return ix[(ix.table == table) & (ix.profile == profile) & (ix.half == half)].sort_values("row").reset_index(drop=True)
 
     def cell_counts(self, context):
         return pd.read_parquet(self.suffstats_dir(context) / "cell_counts.parquet")
@@ -76,12 +80,11 @@ class Reference:
 
     def moments(self, context, profile="authors", half="all", table="pert"):
         """(index rows, dict of sum name -> array rows x measured genes) for one table, profile and half."""
-        ix = self.index(context)
-        ix = ix[(ix.table == table) & (ix.profile == profile) & (ix.half == half)].sort_values("row")
+        ix = self.index(context, table, profile, half)
         name = "pert_moments.h5" if table == "pert" else "ctrl_batch_moments.h5"
         with h5py.File(self.suffstats_dir(context) / name, "r") as h:
             sums = {s: h[f"{profile}/{half}/{s}"][:] for s in SUMS}
-        return ix.reset_index(drop=True), sums
+        return ix, sums
 
     def means(self, context, profile="authors", half="all", table="pert"):
         """Pseudobulks in the three spaces: theta_A, m_B, m_C (rows x measured genes) and per-gene variances of x^B and x^C."""
@@ -96,7 +99,7 @@ class Reference:
     def control_reference(self, context, profile="authors", half="all"):
         """Batch-matched control references per perturbation: (perturbation index, ref_C, ref_B_linear, ref_A_theta)."""
         cix, cm = self.means(context, profile, half, "ctrl")
-        pix, _ = self.moments(context, profile, half, "pert")
+        pix = self.index(context, "pert", profile, half)
         cnt = self.cell_counts(context)
         cnt = cnt[(cnt.profile == profile) & (cnt.half == half)]
         wn = self._weights(cnt, pix.perturbation, cix.batch, "n_pb")
@@ -146,8 +149,44 @@ class Reference:
         return dict(g0=g[f"g0_{profile}"].to_numpy(), target=lambda t: ids == t, neighbors=neighbors, ensembl_ids=ids)
 
     def scores(self, context):
+        """Per-cell batch, doublet_score and cell-cycle scores; the stored predicted_doublet is void (scrublet's threshold search fails on author-filtered data and writes False for whole batches) and is dropped."""
         p = self.root / "scores" / f"{context}.parquet"
-        return pd.read_parquet(p) if p.exists() else None
+        return pd.read_parquet(p).drop(columns="predicted_doublet") if p.exists() else None
+
+    def control_shift(self, context, profile="authors"):
+        """Per control batch: controls used and the per-gene RMS distance over G0 in space C between the batch's control mean and the pooled control mean."""
+        g0 = self.measured_genes(context)[f"g0_{profile}"].to_numpy()
+        cix, cs = self.moments(context, profile, "all", "ctrl")
+        n = cix.n.to_numpy()
+        xc = cs["sum_xC"][:, g0]
+        shift = np.sqrt(((xc / n[:, None] - xc.sum(0) / n.sum()) ** 2).mean(1))
+        return pd.DataFrame(dict(batch=cix.batch.astype(str), controls_used=n.astype(int), control_shift=shift))
+
+    def batch_qc(self, context, profile="authors"):
+        """One row per batch: cells, controls used, medians of lib_size, n_genes, pct_mito and doublet_score, strict share, control shift, and the depth_low and control_shift_high flags."""
+        obs = self.obs(context, ["batch", "lib_size", "n_genes", "pct_mito", "qc_strict"])
+        t = obs.groupby(obs.batch.astype(str)).agg(cells=("lib_size", "size"), lib_size_median=("lib_size", "median"), n_genes_median=("n_genes", "median"),
+                                                  pct_mito_median=("pct_mito", "median"), qc_strict_share=("qc_strict", "mean"))
+        s = self.scores(context)
+        t["doublet_score_median"] = s.groupby(s.batch.astype(str)).doublet_score.median() if s is not None else np.nan
+        shift = self.control_shift(context, profile).set_index("batch")
+        t.insert(1, "controls_used", shift.controls_used.reindex(t.index).fillna(0).astype(int))
+        t["control_shift"] = shift.control_shift.reindex(t.index)
+        r = self.cfg["reader"]
+        t["depth_low"] = t.lib_size_median < r["batch_depth_low_fraction"] * t.lib_size_median.median()
+        mad = (t.control_shift - t.control_shift.median()).abs().median()
+        t["control_shift_high"] = t.control_shift > t.control_shift.median() + r["batch_control_shift_mad"] * mad
+        return t.reset_index()
+
+    def batch_effect_size(self, context, profile="authors"):
+        """Batch offset scale (controls-weighted RMS of the control shift over batches), perturbation effect scale (median over perturbations with enough cells of the per-gene RMS of dC over G0) and their ratio."""
+        shift = self.control_shift(context, profile)
+        batch_offset = float(np.sqrt((shift.controls_used * shift.control_shift ** 2).sum() / shift.controls_used.sum()))
+        g0 = self.measured_genes(context)[f"g0_{profile}"].to_numpy()
+        pix, d = self.deltas(context, profile, "all", spaces=("C",))
+        enough = pix.n.to_numpy() >= self.cfg["reader"]["min_cells_for_effect"]
+        effect = float(np.median(np.sqrt((d["dC"][np.ix_(enough, g0)] ** 2).mean(1)))) if enough.any() else np.nan
+        return dict(batch_offset_scale=batch_offset, perturbation_effect_scale=effect, ratio=batch_offset / effect)
 
     def delta_from_cells(self, context, perturbation, profile="authors"):
         """δ^C of one perturbation straight from the shard (for populations below the moment threshold)."""
