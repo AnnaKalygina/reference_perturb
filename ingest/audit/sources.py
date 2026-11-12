@@ -7,6 +7,7 @@ import re
 import subprocess
 import tarfile
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import h5py
@@ -829,6 +830,83 @@ def mccutcheon23_cd8t_crispri(cfg):
 
 def mccutcheon23_cd8t_crispra(cfg):
     return mccutcheon(cfg, "crispra")
+PAPALEXI_CDNA = "GSM4633614_ECCITE_cDNA_counts.tsv.gz"
+
+
+@contextmanager
+def tar_text(path, member):
+    """Text handle on a gzip member of a tar, read in place."""
+    with tarfile.open(path) as tar, gzip.open(tar.extractfile(member), "rt") as fh:
+        yield fh
+
+
+def papalexi21_thp1(cfg):
+    """Papalexi 2021 ECCITE-seq THP-1 (GSE153056): the pooled 111-guide experiment, stimulated cells only, from the authors' metadata."""
+    d = Path(cfg["root"]) / "raw/papalexi21_thp1"
+    m = pd.read_csv(d / "GSE153056_ECCITE_metadata.tsv.gz", sep="\t", index_col=0)
+    is_ctrl = (m.gene == "NT").to_numpy()
+    obs = frame(len(m), context=ctx("papalexi21_thp1", "THP1", "IFNG_DAC_TGFB1"), cell_type="THP-1", condition="IFNG_DAC_TGFB1", timepoint="72h",
+                donor="THP-1", batch=m["orig.ident"].to_numpy(), perturbation=np.where(is_ctrl, "", m.gene), is_control=is_ctrl,
+                control_kind=np.where(is_ctrl, "non_targeting", None), guide=m.guide_ID.to_numpy(), n_guides=1.0,
+                total_counts=m.nCount_RNA.to_numpy(), n_genes=m.nFeature_RNA.to_numpy(), pct_mito=m["percent.mito"].to_numpy())
+    obs["barcode"] = m.index.to_numpy()
+    obs["transduction_replicate"] = m.replicate.to_numpy()
+    genes, vals = [], []
+    with tar_text(d / "GSE153056_RAW.tar", PAPALEXI_CDNA) as fh:
+        fh.readline()
+        for line in fh:
+            name, rest = line.split("\t", 1)
+            genes.append(name.strip('"'))
+            if len(vals) < cfg["integer_sample_values"]:
+                v = np.fromstring(rest, dtype=np.float64, sep="\t")
+                vals.extend(v[v != 0])
+    meta = dict(deposit="GEO GSE153056 GSE153056_ECCITE_metadata.tsv.gz + GSM4633614_ECCITE_cDNA_counts.tsv.gz (in GSE153056_RAW.tar)",
+                files=[str(d / "GSE153056_RAW.tar"), str(d / "GSE153056_ECCITE_metadata.tsv.gz")],
+                batch_field="metadata orig.ident (10x 5' lane, 8); replicate = transduction replicate hashed into the lanes (rep1 in lanes 1-4, rep2 and rep3 in lanes 5-8)",
+                batch_kind="technical (lane) nested in transduction replicate", modality="CRISPRko (doxycycline-inducible Cas9, lentiviral CROP-seq sgRNA)",
+                cell_calling="authors (Cell Ranger 2.1.1 hg19, > 10% mito and < 100 genes removed, HTO doublets and negatives removed, replicate 4 removed)",
+                guide_assignment="authors' guide_ID: gRNA with the most GDO counts; < 5 counts for every gRNA = negative, several high gRNAs = doublet; only singlets deposited",
+                matrix="dense genes x cells tsv.gz, integer; column sums equal nCount_RNA", gene_ids="symbols only (hg19 Cell Ranger reference)",
+                flags=["only the 90% stimulated (DAC + TGFB1 + IFNG) cells are deposited; the 10% unstimulated cells are not",
+                       "MULTI_ID / HTO_classification name the replicates rep1/rep3/rep4 and rep1/rep3/rep2; the replicate column (rep1-3) is used",
+                       "PDL1g1-3 and eGFPg1 are in the GDO feature list but assigned to no cell",
+                       "the arrayed ECCITE experiment (GSM4633608-13) and the CITE-seq experiment are not ingested"])
+    return Source("papalexi21_thp1", obs, meta, np.array(genes, dtype=object), None, np.array(vals[: cfg["integer_sample_values"]]))
+
+
+HSPC_CONTROLS = {"NT": "non_targeting", "AAVS1": "safe_targeting"}
+
+
+def martinrufino25_hspc(cfg):
+    """Martin-Rufino 2025 Perturb-multiome HSPC (GSE274113): authors' annotated metadata, counts from the per-replicate CROPseq h5."""
+    d = Path(cfg["root"]) / "raw/hspc25_multiome"
+    m = pd.read_csv(d / "GSE274113_annotated_metadata.csv.gz", dtype=str, keep_default_na=False)
+    m = m[m.iloc[:, 0] != ""].reset_index(drop=True)
+    is_ctrl = (m.target == "NT").to_numpy()
+    kind = m.perturbation_name.str.rsplit("_", n=1).str[0].map(HSPC_CONTROLS)
+    obs = frame(len(m), context=("martinrufino25_hspc__HSPC__" + m.Timepoint.str.replace(" ", "", regex=False)).to_numpy(),
+                cell_type="primary HSPC (erythroid differentiation)", condition="erythroid differentiation", timepoint=m.Timepoint.to_numpy(),
+                donor="CD34+ HSPC donor", batch=m.replicate.to_numpy(), perturbation=np.where(is_ctrl, "", m.target), is_control=is_ctrl,
+                control_kind=np.where(is_ctrl, kind, None), guide=m.perturbation_name.to_numpy(), n_guides=1.0,
+                total_counts=pd.to_numeric(m.nCount_RNA).to_numpy(), n_genes=pd.to_numeric(m.nFeature_RNA).to_numpy())
+    obs["barcode"] = m.iloc[:, 0].str.split("_").str[1].to_numpy()
+    obs["author_cell_type"] = m.new_CellType.to_numpy()
+    first = sorted(d.glob("GSE274113_filtered_feature_bc_matrix_*.h5"))[0]
+    ids, names, ft, _ = tenx_features(first)
+    gex = ft == "Gene Expression"
+    meta = dict(deposit="GEO GSE274113 GSE274113_annotated_metadata.csv.gz + GSE274113_filtered_feature_bc_matrix_<k>.h5 (Cellranger v7 GEX + CRISPR Guide Capture, one per replicate)",
+                files=[str(d)], batch_field="metadata replicate (rep<k>) = one 10x Multiome channel; 4 technical replicates per time point on one chip",
+                batch_kind="technical", modality="CRISPRko (Cas9 RNP electroporation, lentiviral CROP-seq sgRNA)",
+                cell_calling="authors (Cellranger ARC barcodes with a detected sgRNA: 137,604 cells)",
+                guide_assignment="authors' perturbation_name: one sgRNA per cell, equal to the CRISPR Guide Capture feature with the most UMIs in every replicate; cells without a detected sgRNA are not deposited",
+                matrix="10x h5 CSC integer; GEX counts identical to the rep<k> Multiome (ATAC + GEX) h5 for every annotated cell",
+                gene_ids="Cellranger GRCh38 features (Ensembl ids + symbols)",
+                flags=["controls: NT_1-3 non-targeting and AAVS1_1-3 safe-targeting, both labelled target NT by the authors",
+                       "rep11 and rep15 are not on GEO; the Multiome h5 of rep9 is on GEO but not on disk, its CROPseq h5 is",
+                       "the metadata csv has an empty row after every cell row",
+                       "cells of one context span many differentiation states (author_cell_type); the authors compare each cell with nearest-neighbour controls",
+                       "Peaks and CRISPR Guide Capture features skipped"])
+    return Source("martinrufino25_hspc", obs, meta, names[gex], ids[gex], tenx_values(first, cfg["integer_sample_values"]))
 
 
 def xatlas_repo(cfg):
@@ -847,8 +925,12 @@ def xatlas_repo(cfg):
     return Source("xatlas_orion_repo", obs, meta, None, None, vals)
 
 
+
+
+
 SOURCES = {f.__name__: f for f in [scperturb_adamson, scperturb_frangieh, scperturb_sunshine, scperturb_norman,
                                    scperturb_wessels, replogle22_k562, replogle22_rpe1, replogle22_gwps, nadig25_hepg2,
                                    nadig25_jurkat, replogle20, orion_hct116, orion_hek293t, kolf, vcc2025_h1, feng, dld1, hesc,
                                    cd4t, jiang, mcfaline, viperturb, shifrut18_t_crisprko, mccutcheon23_cd8t_crispri,
-                                   mccutcheon23_cd8t_crispra, tian21_neurons_crispri, tian21_neurons_crispra]}
+                                   mccutcheon23_cd8t_crispra, tian21_neurons_crispri, tian21_neurons_crispra, papalexi21_thp1,
+                                   martinrufino25_hspc]}

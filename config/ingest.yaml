@@ -83,6 +83,8 @@ cell_rules:
     mccutcheon23_cd8t_crispra: McCutcheon et al. 2023 Nat Genet Methods, same rule as mccutcheon23_cd8t_crispri
     tian21_neurons_crispri: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
     tian21_neurons_crispra: Tian et al. 2021 Nat Neurosci, only cells with a single sgRNA above the 4 SD UMI cutoff were retained
+    papalexi21_thp1: Papalexi et al. 2021 Nat Genet, the gRNA with most GDO counts is assigned, < 5 counts for every gRNA is negative, several high gRNAs is a doublet; negatives and doublets removed, only singlets deposited
+    martinrufino25_hspc: Martin-Rufino et al. 2025 Science (bioRxiv methods), one sgRNA per cell from the CROP-seq enrichment library; cells without a detected sgRNA (8.9%) are not deposited, no multi-guide class
 
 shard:
   bucket_rows: 65536
